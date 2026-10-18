@@ -1,0 +1,1129 @@
+<!doctype html>
+<html dir="rtl" lang="he" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<meta name="robots" content="noindex, nofollow">
+<title>שווים · קליטת מתמודד חדש</title>
+<link rel="icon" href="assets/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script>
+/* =====================================================================
+   הגדרות — ממלאים פעם אחת (ראו SETUP-GUIDE.md)
+   כל עוד supabaseUrl ריק, האפליקציה רצה במצב הדגמה (הנתונים בדפדפן בלבד).
+   ===================================================================== */
+window.SHAVIM_CONFIG = {
+  supabaseUrl: '',          // https://xxxx.supabase.co
+  supabaseAnonKey: '',      // Project Settings → API → anon public
+  emailjs: {                // https://dashboard.emailjs.com
+    publicKey: '',
+    serviceId: '',
+    templateId: ''
+  },
+  noaEmail: 'noa@amutatshavim.co.il',
+  noaName: 'נועה',
+  whatsappBusiness: '051-5773381',
+  publicUrl: ''             // ריק = הכתובת הנוכחית של האתר
+};
+</script>
+<script>
+  // Noa's area can be installed as a desktop app (Chrome / Edge → Install)
+  if (new URLSearchParams(location.search).has('noa')) {
+    const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'manifest.json';
+    document.head.appendChild(l);
+  }
+</script>
+
+<style>
+:root{
+  --orange:#E14E12; --green:#4C9033; --yellow:#F6D400; --blue:#9ED3F3;
+  --ink:#222222; --muted:#5A5A5A; --line:#E3E3E3; --soft:#F7F7F7; --bg:#FFFFFF;
+  --radius:12px; --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Heebo',system-ui,sans-serif;font-size:16px;line-height:1.55}
+body{direction:rtl;text-align:right;min-height:100vh}
+button,input,textarea,select{font:inherit;color:inherit}
+a{color:var(--ink)}
+.ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- header ---------- */
+.top{position:sticky;top:0;z-index:20;background:var(--bg)}
+.top-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:16px;min-height:68px}
+.top .who{display:flex;align-items:center;gap:10px;font-weight:600}
+.top .who .av{width:34px;height:34px;border-radius:50%;background:var(--yellow);display:grid;place-items:center;font-weight:800}
+.top .logo{margin-inline-start:auto;display:block;height:46px}
+.top .logo img{height:46px;width:auto;display:block}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);height:4px}
+.strip i:nth-child(1){background:var(--orange)} .strip i:nth-child(2){background:var(--yellow)}
+.strip i:nth-child(3){background:var(--green)} .strip i:nth-child(4){background:var(--blue)}
+.demo-bar{background:var(--soft);border-bottom:1px solid var(--line);font-size:14px;color:var(--muted);text-align:center;padding:6px 16px}
+.demo-bar a{font-weight:600;margin-inline:6px}
+
+/* ---------- layout ---------- */
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px 120px}
+.wrap.wide{max-width:1180px}
+h1{font-size:28px;font-weight:800;margin:6px 0 4px;line-height:1.25}
+h2{font-size:19px;font-weight:700;margin:0 0 14px}
+.lead{color:var(--muted);margin:0 0 22px}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:16px;background:var(--bg)}
+.card h2 .num{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;margin-inline-end:8px;font-size:15px;font-weight:800}
+.card:nth-of-type(1) h2 .num{background:var(--yellow)}
+.card:nth-of-type(2) h2 .num{background:var(--blue)}
+.card:nth-of-type(3) h2 .num{background:var(--green);color:#fff}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px 16px}
+@media (max-width:640px){.grid2,.grid3{grid-template-columns:1fr}}
+
+/* ---------- fields ---------- */
+.field label{display:block;font-weight:600;margin-bottom:6px}
+.field .req{color:var(--orange);font-weight:800}
+.field input,.search input,.textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--bg);transition:border-color .15s var(--ease)}
+.field input:hover{border-color:#cfcfcf}
+.field input:focus,.search input:focus,.textarea:focus{border-color:var(--ink);outline:none}
+.field input[dir=ltr]{text-align:left}
+.field input[dir=ltr]::placeholder{text-align:left}
+.field.bad input{border-color:var(--orange)}
+.field .hint{font-size:13px;color:var(--muted);margin-top:4px}
+.field .err{font-size:14px;color:var(--orange);font-weight:600;margin-top:4px;min-height:0}
+.err:empty{display:none}
+.fix{background:none;border:0;padding:0;text-decoration:underline;cursor:pointer;font-weight:700;color:var(--ink)}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 20px;border-radius:10px;border:1.5px solid var(--ink);background:var(--bg);font-weight:700;cursor:pointer;text-decoration:none;transition:background-color .15s var(--ease),border-color .15s var(--ease);white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--orange);border-color:var(--orange);color:#fff;font-size:18.7px;min-height:50px}
+.btn.primary:hover{background:var(--orange);border-color:var(--ink)}
+.btn.small{min-height:38px;padding:0 14px;font-size:15px}
+.btn.ghost{border-color:transparent;background:transparent;text-decoration:underline}
+.btn.ghost:hover{background:var(--soft)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.busy{pointer-events:none;opacity:.7}
+.btn.busy::after{content:"";width:16px;height:16px;border:2.5px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.linkbtn{background:none;border:0;padding:4px 2px;cursor:pointer;font-weight:600;text-decoration:underline;color:var(--muted)}
+.linkbtn:hover{color:var(--ink)}
+
+/* ---------- documents (referrer) ---------- */
+.doc{border:1.5px dashed var(--line);border-radius:10px;padding:14px;margin-bottom:10px;transition:border-color .15s var(--ease),background-color .15s var(--ease)}
+.doc.has{border-style:solid;border-color:var(--green)}
+.doc.drag{border-color:var(--ink);background:var(--soft)}
+.doc.bad{border-color:var(--orange)}
+.doc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.doc-name{font-weight:700;font-size:17px}
+.tag{font-size:13px;font-weight:600;border-radius:999px;padding:2px 10px;border:1px solid var(--line);color:var(--muted)}
+.tag.req{border-color:var(--orange);color:var(--ink)}
+.doc-state{margin-inline-start:auto;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+.ok-dot{width:20px;height:20px;border-radius:50%;background:var(--green);display:inline-grid;place-items:center}
+.ok-dot svg{width:12px;height:12px}
+.doc-files{list-style:none;margin:10px 0 0;padding:0}
+.doc-files li{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:15px}
+.doc-files li:first-child{border-top:0}
+.doc-files .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+.doc-files .fmeta{color:var(--muted);font-size:13px}
+.doc-files .x{margin-inline-start:auto}
+.doc-actions{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.drop-hint{font-size:13px;color:var(--muted)}
+@media (hover:none){.drop-hint{display:none}}
+.doc-err{color:var(--orange);font-weight:600;font-size:14px;margin-top:6px}
+.doc-err:empty{display:none}
+
+.actions-bar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:14px 16px;margin:0 -16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;z-index:5}
+.actions-bar .missing{font-size:14px;color:var(--muted);flex-basis:100%}
+.note{border-radius:10px;padding:12px 14px;margin-bottom:16px;font-weight:500}
+.note.info{background:var(--blue)}
+.note.wait{background:var(--yellow)}
+.note.plain{background:var(--soft)}
+
+/* ---------- end states ---------- */
+.end{text-align:center;padding:40px 8px}
+.end .big{width:72px;height:72px;border-radius:20px;margin:0 auto 18px;display:grid;place-items:center;background:var(--green)}
+.end .big svg{width:36px;height:36px}
+.end p{max-width:520px;margin:8px auto;color:var(--muted)}
+.copyrow{display:flex;gap:8px;max-width:560px;margin:18px auto 0}
+.copyrow input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;direction:ltr;text-align:left;font-size:14px;background:var(--soft)}
+
+/* ---------- dashboard ---------- */
+.dash-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.dash-head h1{margin:0}
+.share{margin-inline-start:auto;display:flex;gap:8px;flex-wrap:wrap}
+.folderline{font-size:14px;color:var(--muted);margin:-8px 0 18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.folderline b{color:var(--ink)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1.5px solid var(--line);background:var(--bg);border-radius:999px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:15px;min-height:38px}
+.chip:hover{border-color:#cfcfcf}
+.chip[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:#fff}
+.chip .n{font-weight:400;margin-inline-start:4px;opacity:.8}
+.search{margin-inline-start:auto;min-width:240px}
+@media (max-width:700px){.search{min-width:100%}}
+
+.list{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.lrow{display:grid;grid-template-columns:minmax(170px,1.4fr) minmax(130px,1fr) 150px 120px 150px 90px;gap:12px;align-items:center;padding:14px 16px;border-top:1px solid var(--line);width:100%;background:var(--bg);border-inline:0;border-bottom:0;text-align:right;cursor:pointer;transition:background-color .15s var(--ease)}
+.lrow:hover{background:var(--soft)}
+.lrow.head{cursor:default;font-size:13px;font-weight:600;color:var(--muted);border-top:0;padding-block:10px;background:var(--soft)}
+.lrow.flash{animation:flash 1.6s var(--ease)}
+@keyframes flash{0%,40%{background:var(--yellow)}100%{background:var(--bg)}}
+.pname{font-weight:700;font-size:16px}
+.sub{font-size:13px;color:var(--muted)}
+.pills{display:flex;gap:4px;align-items:center}
+.pill{width:20px;height:20px;border-radius:5px;border:1.5px solid #bdbdbd;display:grid;place-items:center}
+.pill.on{background:var(--green);border-color:var(--green)}
+.pill.opt{border-style:dashed;border-color:#cfcfcf}
+.pill.opt.on{border-style:solid}
+.pill svg{width:11px;height:11px}
+.pills .cnt{font-size:13px;color:var(--muted);margin-inline-start:6px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;border-radius:999px;padding:3px 12px;white-space:nowrap}
+.st-prog{background:var(--blue)}
+.st-wait{background:var(--yellow)}
+.st-ok{border:1.5px solid var(--green);padding:1.5px 10.5px}
+.st-ok::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--green)}
+.late{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;margin-top:4px}
+.late::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--orange)}
+.fold{font-size:13px;color:var(--muted)}
+.fold.full{color:var(--ink);font-weight:600}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+@media (max-width:900px){
+  .lrow{grid-template-columns:1fr auto;grid-template-areas:"n s" "r d" "p f"}
+  .lrow.head{display:none}
+  .c-n{grid-area:n}.c-s{grid-area:s;justify-self:end}.c-r{grid-area:r}.c-d{grid-area:d;justify-self:end}.c-p{grid-area:p}.c-f{grid-area:f;justify-self:end}
+}
+
+/* ---------- drawer ---------- */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:40;animation:fade .15s var(--ease)}
+.drawer{position:fixed;inset-block:0;inset-inline-end:0;width:min(560px,100%);background:var(--bg);z-index:41;overflow:auto;box-shadow:0 0 0 1px var(--line);animation:slide .2s var(--ease);display:flex;flex-direction:column}
+@keyframes fade{from{opacity:0}}
+@keyframes slide{from{transform:translateX(-24px);opacity:0}}
+.dr-top{position:sticky;top:0;background:var(--bg);padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;z-index:2}
+.dr-body{padding:18px 20px 24px;flex:1}
+.dr-body h1{font-size:24px}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:15px;margin:10px 0 18px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-weight:500}
+.sec-title{font-size:15px;font-weight:700;margin:20px 0 8px;color:var(--muted)}
+.dlist{border:1px solid var(--line);border-radius:10px}
+.ditem{padding:12px 14px;border-top:1px solid var(--line)}
+.ditem:first-child{border-top:0}
+.ditem .dh{display:flex;align-items:center;gap:8px;font-weight:700}
+.ditem .dh .miss{margin-inline-start:auto;font-size:13px;color:var(--muted);font-weight:600}
+.ditem .dh .miss.r{color:var(--orange)}
+.frow{display:flex;align-items:center;gap:10px;font-size:14px;margin-top:6px;flex-wrap:wrap}
+.frow .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.frow .in{font-size:13px;font-weight:600}
+.frow .new{font-size:13px;font-weight:700;background:var(--yellow);padding:0 8px;border-radius:999px}
+.frow .x{margin-inline-start:auto}
+.hist{font-size:13px;color:var(--muted);margin-top:18px;line-height:1.9}
+.dr-actions{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:14px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.dr-actions .why{font-size:14px;color:var(--muted);flex-basis:100%}
+.danger{margin-top:28px;text-align:center}
+
+/* ---------- modal ---------- */
+.modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.32);animation:fade .15s var(--ease)}
+.mbox{background:var(--bg);border-radius:14px;max-width:520px;width:100%;padding:22px;max-height:90vh;overflow:auto}
+.mbox h2{font-size:20px}
+.mbox p{color:var(--muted);margin:0 0 14px}
+.mbtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.textarea{min-height:170px;resize:vertical;line-height:1.6}
+.path{direction:ltr;text-align:left;background:var(--soft);border-radius:8px;padding:8px 10px;font-size:14px;margin:6px 0 14px;word-break:break-all}
+.pick{display:flex;flex-direction:column;gap:8px}
+
+/* ---------- login ---------- */
+.login{max-width:400px;margin:40px auto;padding:0 16px}
+.pw{position:relative}
+.pw input{padding-inline-end:46px}
+.pw .eye{position:absolute;inset-inline-end:6px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;width:36px;height:36px;display:grid;place-items:center;color:var(--muted)}
+
+/* ---------- toast ---------- */
+#toast{position:fixed;bottom:22px;inset-inline:0;display:flex;justify-content:center;pointer-events:none;z-index:80}
+#toast .t{background:var(--ink);color:#fff;border-radius:10px;padding:12px 18px;font-weight:600;max-width:min(560px,92vw);box-shadow:0 4px 18px rgba(0,0,0,.18);animation:fade .15s var(--ease)}
+.loading{padding:60px 16px;text-align:center;color:var(--muted)}
+.foot{margin-top:28px;font-size:14px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div id="demo"></div>
+<header class="top" id="top"></header>
+<main id="app"><div class="loading">טוען…</div></main>
+<div id="toast" aria-live="polite"></div>
+<div id="layer"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Constants
+   ===================================================================== */
+const CFG = window.SHAVIM_CONFIG;
+const DEMO = !CFG.supabaseUrl;
+const DOCS = [
+  {key:'committee',   label:'טופס החלטת ועדה',              req:true},
+  {key:'psychiatric', label:'דוח פסיכיאטרי עדכני',           req:true},
+  {key:'social',      label:'דוח סוציאלי / פסיכוסוציאלי',    req:true},
+  {key:'medical',     label:'סיכום מידע רפואי',              req:false},
+  {key:'idcard',      label:'צילום ת"ז',                     req:false},
+];
+const DOC = Object.fromEntries(DOCS.map(d => [d.key, d]));
+const REQUIRED = DOCS.filter(d => d.req).map(d => d.key);
+const STATUS = {
+  in_progress:{label:'בתהליך', cls:'st-prog'},
+  submitted:  {label:'ממתין לאישור', cls:'st-wait'},
+  approved:   {label:'אושר', cls:'st-ok'},
+};
+const OVERDUE_DAYS = 7, PURGE_DAYS = 14, MAX_MB = 15;
+const EXT_MIME = {pdf:'application/pdf',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heic:'image/heic',heif:'image/heif',
+  doc:'application/msword',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
+const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx,image/*,application/pdf';
+const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
+const BASE_URL = location.protocol === 'file:' ? location.href.split(/[?#]/)[0]
+  : (CFG.publicUrl || (location.origin + location.pathname)).replace(/index\.html$/,'');
+const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const ICON_EYE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+/* =====================================================================
+   Small helpers
+   ===================================================================== */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const fmtDate = iso => { if (!iso) return '—'; const d = new Date(iso); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; };
+const dotDate = (d = new Date()) => `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
+const daysSince = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+const fmtSize = b => !b ? '' : b < 1024*1024 ? Math.max(1, Math.round(b/1024)) + 'KB' : (b/1024/1024).toFixed(1) + 'MB';
+const extOf = name => (String(name).toLowerCase().match(/\.([a-z0-9]+)$/) || [,''])[1];
+const safeName = s => String(s).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/[. ]+$/,'');
+const daysAgoTxt = n => n <= 0 ? 'היום' : n === 1 ? 'אתמול' : `לפני ${n} ימים`;
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+
+function toast(msg, ms = 3200) {
+  const t = $('#toast'); t.innerHTML = `<div class="t">${esc(msg)}</div>`;
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.innerHTML = '', ms);
+}
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); }
+  catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+}
+function busy(btn, on) { if (!btn) return; btn.classList.toggle('busy', on); btn.disabled = on; }
+
+/* ---------- validation ---------- */
+function normPhone(v) {
+  let d = String(v || '').replace(/[^\d+]/g, '');
+  if (d.startsWith('+972')) d = '0' + d.slice(4);
+  else if (d.startsWith('00972')) d = '0' + d.slice(5);
+  else if (d.startsWith('972')) d = '0' + d.slice(3);
+  d = d.replace(/\D/g, '');
+  if (/^5\d{8}$/.test(d)) d = '0' + d;
+  return d;
+}
+const phoneOk = v => /^05\d{8}$/.test(normPhone(v));
+const fmtPhone = v => { const d = normPhone(v); return d.slice(0,3) + '-' + d.slice(3); };
+const waPhone = v => '972' + normPhone(v).slice(1);
+const normEmail = v => String(v || '').trim().toLowerCase();
+const emailOk = v => /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(normEmail(v));
+const TYPOS = {'gmial.com':'gmail.com','gmal.com':'gmail.com','gmai.com':'gmail.com','gamil.com':'gmail.com','gmail.co':'gmail.com','gmail.co.il':'gmail.com',
+  'hotmial.com':'hotmail.com','hotmal.com':'hotmail.com','walla.co':'walla.co.il','walla.com':'walla.co.il','wala.co.il':'walla.co.il',
+  'yaho.com':'yahoo.com','outlok.com':'outlook.com','outlook.co':'outlook.com'};
+function emailFix(v) { const e = normEmail(v); const dom = e.split('@')[1]; return dom && TYPOS[dom] ? e.split('@')[0] + '@' + TYPOS[dom] : null; }
+function normTz(v) { const d = String(v || '').replace(/\D/g, ''); return d.length >= 5 && d.length <= 9 ? d.padStart(9, '0') : d; }
+function tzOk(v) {
+  const d = normTz(v); if (!/^\d{9}$/.test(d)) return false;
+  let s = 0; for (let i = 0; i < 9; i++) { let n = +d[i] * (i % 2 + 1); s += n > 9 ? n - 9 : n; }
+  return s % 10 === 0;
+}
+
+/* ---------- request helpers ---------- */
+const filesOf = (r, key) => (r.files || []).filter(f => f.doc_type === key);
+const missingReq = r => REQUIRED.filter(k => !filesOf(r, k).length);
+const isLate = r => r.status === 'in_progress' && daysSince(r.created_at) >= OVERDUE_DAYS;
+const contLink = r => `${BASE_URL}?r=${r.token}`;
+const noaLink = r => `${BASE_URL}?noa&open=${r.id || ''}`;
+
+/* =====================================================================
+   IndexedDB (folder handle + demo files)
+   ===================================================================== */
+const idb = {
+  _db: null,
+  open() {
+    if (this._db) return Promise.resolve(this._db);
+    return new Promise((res, rej) => {
+      const q = indexedDB.open('shavim-intake', 1);
+      q.onupgradeneeded = () => { q.result.createObjectStore('kv'); q.result.createObjectStore('blobs'); };
+      q.onsuccess = () => res(this._db = q.result); q.onerror = () => rej(q.error);
+    });
+  },
+  async get(store, key) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction(store).objectStore(store).get(key); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+  async set(store, key, val) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction(store, 'readwrite'); t.objectStore(store).put(val, key); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
+  async del(store, key) { const db = await this.open(); return new Promise((res) => { const t = db.transaction(store, 'readwrite'); t.objectStore(store).delete(key); t.oncomplete = () => res(); }); },
+};
+
+/* =====================================================================
+   Email (EmailJS REST) — automatic messages only
+   ===================================================================== */
+async function sendEmail({to, subject, html, replyTo}) {
+  const ej = CFG.emailjs || {};
+  if (DEMO || !ej.publicKey || !ej.serviceId || !ej.templateId) {
+    console.info('[email skipped – not configured]', {to, subject});
+    if (DEMO) toast(`(הדגמה) מייל אל ${to} לא נשלח באמת`);
+    return false;
+  }
+  try {
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({service_id: ej.serviceId, template_id: ej.templateId, user_id: ej.publicKey,
+        template_params: {to_email: to, subject, message_html: html, reply_to: replyTo || CFG.noaEmail}})
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
+  } catch (e) { console.warn('email failed', e); return false; }
+}
+function docsTableHtml(r) {
+  return '<ul style="padding-right:18px;margin:8px 0">' + DOCS.map(d => {
+    const n = filesOf(r, d.key).length;
+    return `<li>${n ? '✅' : (d.req ? '❌' : '➖')} ${esc(d.label)}${d.req ? '' : ' (רשות)'}${n > 1 ? ` · ${n} קבצים` : ''}</li>`;
+  }).join('') + '</ul>';
+}
+function mailToNoa(r, kind) {
+  const miss = missingReq(r);
+  const head = kind === 'submit' ? (r.status === 'submitted' && r._resend ? 'נוספו מסמכים' : 'נשלחו כל מסמכי החובה') : 'נשמר חלקית';
+  const subject = `קליטת מתמודד: ${r.participant_name} – ${head}`;
+  const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6">
+    <p><b>${esc(r.participant_name)}</b> · ת"ז ${esc(r.participant_id)}</p>
+    <p>גורם מפנה: ${esc(r.ref_name)} · ${esc(r.ref_phone)} · ${esc(r.ref_email)}</p>
+    ${docsTableHtml(r)}
+    <p>${miss.length ? `חסרים עוד ${miss.length} מסמכי חובה.` : 'כל מסמכי החובה הגיעו — אפשר לאשר.'}</p>
+    <p><a href="${noaLink(r)}">לפתיחת הבקשה בדשבורד</a></p></div>`;
+  return sendEmail({to: CFG.noaEmail, subject, html, replyTo: r.ref_email});
+}
+function mailToReferrer(r) {
+  const miss = missingReq(r);
+  const subject = `לינק להשלמת מסמכי הקליטה של ${r.participant_name} – עמותת שווים`;
+  const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6">
+    <p>שלום ${esc(r.ref_name)},</p>
+    <p>שמרנו את הבקשה לקליטת <b>${esc(r.participant_name)}</b>. אפשר להשלים או להוסיף מסמכים בכל זמן דרך הלינק האישי:</p>
+    <p><a href="${contLink(r)}">${contLink(r)}</a></p>
+    ${docsTableHtml(r)}
+    ${miss.length ? '<p>כשכל מסמכי החובה יעלו, לוחצים "שליחת המסמכים".</p>' : ''}
+    <p>תודה,<br>${esc(CFG.noaName)} · עמותת שווים</p>
+    <p style="color:#777;font-size:13px">הלינק אישי — אין להעביר אותו הלאה.</p></div>`;
+  return sendEmail({to: r.ref_email, subject, html});
+}
+
+/* =====================================================================
+   Backend: Supabase (live) or demo (this browser only)
+   ===================================================================== */
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('script')); document.head.appendChild(s); }); }
+let _sb = null;
+async function sb() {
+  if (_sb) return _sb;
+  if (!window.supabase) await loadScript(SUPABASE_JS);
+  _sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {auth:{persistSession:true, autoRefreshToken:true}});
+  return _sb;
+}
+const unwrap = ({data, error}) => { if (error) throw error; return data; };
+const fileMime = f => f.type || EXT_MIME[extOf(f.name)] || 'application/octet-stream';
+const storagePath = (token, doc, name) => `${token}/${doc}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${extOf(name) || 'bin'}`;
+
+const LiveAPI = {
+  async get(token) { return unwrap(await (await sb()).rpc('intake_get', {p_token: token})); },
+  async save(token, p) { return unwrap(await (await sb()).rpc('intake_save', {p_token: token, p})); },
+  async upload(token, doc, file) {
+    const c = await sb(); const path = storagePath(token, doc, file.name);
+    unwrap(await c.storage.from('intake').upload(path, file, {contentType: fileMime(file), upsert:false}));
+    return unwrap(await c.rpc('intake_add_file', {p_token: token, p_doc_type: doc, p_path: path, p_name: file.name, p_size: file.size, p_mime: fileMime(file)}));
+  },
+  async remove(token, fileId) { return unwrap(await (await sb()).rpc('intake_remove_file', {p_token: token, p_file_id: fileId})); },
+  async submit(token) { return unwrap(await (await sb()).rpc('intake_submit', {p_token: token})); },
+  // staff
+  async session() { const {data} = await (await sb()).auth.getSession(); return data.session ? {email: data.session.user.email} : null; },
+  async login(email, password) { const {error} = await (await sb()).auth.signInWithPassword({email, password}); if (error) throw error; },
+  async logout() { await (await sb()).auth.signOut(); },
+  async list() { return unwrap(await (await sb()).from('requests').select('*, files(*)').order('created_at', {ascending:false})); },
+  async update(id, patch) { unwrap(await (await sb()).from('requests').update(patch).eq('id', id)); },
+  async markFiles(ids, patch) { if (ids.length) unwrap(await (await sb()).from('files').update(patch).in('id', ids)); },
+  async blob(f) { return unwrap(await (await sb()).storage.from('intake').download(f.storage_path)); },
+  async viewUrl(f) { return unwrap(await (await sb()).storage.from('intake').createSignedUrl(f.storage_path, 300)).signedUrl; },
+  async purge(r) {
+    const c = await sb(); const listed = unwrap(await c.storage.from('intake').list(r.token, {limit:1000}));
+    const paths = listed.map(o => `${r.token}/${o.name}`);
+    if (paths.length) unwrap(await c.storage.from('intake').remove(paths));
+  },
+  async destroy(r) { await this.purge(r); unwrap(await (await sb()).from('requests').delete().eq('id', r.id)); },
+};
+
+/* ---- demo backend: localStorage + IndexedDB ---- */
+const DEMO_KEY = 'shavim-demo-v1';
+const Demo = {
+  load() { try { return JSON.parse(localStorage.getItem(DEMO_KEY)) || null; } catch { return null; } },
+  store(db) { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch {} },
+  db() { let d = this.load(); if (!d) { d = seedDemo(); this.store(d); } return d; },
+  pub(r) { return {token:r.token, participant_name:r.participant_name, participant_id:r.participant_id, ref_name:r.ref_name, ref_email:r.ref_email, ref_phone:r.ref_phone, status:r.status, created_at:r.created_at,
+    files:r.files.map(f => ({id:f.id, doc_type:f.doc_type, original_name:f.original_name, size_bytes:f.size_bytes, uploaded_at:f.uploaded_at, locked:!!f.downloaded_at}))}; },
+  find(db, token) { const r = db.requests.find(x => x.token === token); if (!r) throw new Error('not_found'); return r; },
+  open(db, token) { const r = this.find(db, token); if (r.status === 'approved') throw new Error('not_found_or_closed'); return r; },
+};
+const DemoAPI = {
+  async get(token) { return Demo.pub(Demo.find(Demo.db(), token)); },
+  async save(token, p) {
+    const db = Demo.db(); let r, merged = false; const now = new Date().toISOString();
+    if (!token) {
+      r = db.requests.find(x => x.participant_id === p.participant_id && x.ref_email === p.ref_email && x.status !== 'approved');
+      if (r) merged = true;
+      else { r = {id:uid(), token:uid(), status:'in_progress', created_at:now, files:[], possible_duplicate: db.requests.some(x => x.participant_id === p.participant_id)}; db.requests.unshift(r); }
+    } else r = Demo.open(db, token);
+    Object.assign(r, p, {updated_at: now}); Demo.store(db);
+    return {...Demo.pub(r), merged};
+  },
+  async upload(token, doc, file) {
+    const db = Demo.db(); const r = Demo.open(db, token); const id = uid();
+    await idb.set('blobs', id, file);
+    r.files.push({id, doc_type:doc, original_name:file.name, size_bytes:file.size, mime:fileMime(file), uploaded_at:new Date().toISOString(), downloaded_at:null, storage_path:id});
+    r.fully_downloaded_at = null; r.updated_at = new Date().toISOString(); Demo.store(db); return Demo.pub(r);
+  },
+  async remove(token, fileId) { const db = Demo.db(); const r = Demo.open(db, token); r.files = r.files.filter(f => !(f.id === fileId && !f.downloaded_at)); Demo.store(db); return Demo.pub(r); },
+  async submit(token) {
+    const db = Demo.db(); const r = Demo.open(db, token);
+    if (missingReq(r).length) throw new Error('missing_required');
+    r.status = 'submitted'; r.submitted_at = r.submitted_at || new Date().toISOString(); Demo.store(db); return Demo.pub(r);
+  },
+  async session() { try { return sessionStorage.getItem('shavim-demo-login') ? {email: CFG.noaEmail} : null; } catch { return null; } },
+  async login() { try { sessionStorage.setItem('shavim-demo-login', '1'); } catch {} },
+  async logout() { try { sessionStorage.removeItem('shavim-demo-login'); } catch {} },
+  async list() { return structuredClone(Demo.db().requests); },
+  async update(id, patch) { const db = Demo.db(); Object.assign(db.requests.find(r => r.id === id), patch); Demo.store(db); },
+  async markFiles(ids, patch) { const db = Demo.db(); db.requests.forEach(r => r.files.forEach(f => { if (ids.includes(f.id)) Object.assign(f, patch); })); Demo.store(db); },
+  async blob(f) { return (await idb.get('blobs', f.id)) || demoPdf(f.original_name); },
+  async viewUrl(f) { return URL.createObjectURL(await this.blob(f)); },
+  async purge(r) { for (const f of r.files) await idb.del('blobs', f.id); },
+  async destroy(r) { await this.purge(r); const db = Demo.db(); db.requests = db.requests.filter(x => x.id !== r.id); Demo.store(db); },
+};
+const API = DEMO ? DemoAPI : LiveAPI;
+
+function demoPdf(title) {
+  const txt = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 52>>stream\nBT /F1 24 Tf 60 760 Td (Demo document - Shavim) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF`;
+  return new Blob([txt], {type:'application/pdf'});
+}
+function seedDemo() {
+  const ago = d => new Date(Date.now() - d * 86400000 - 3600000).toISOString();
+  const f = (doc, name, d, dl) => ({id:uid(), doc_type:doc, original_name:name, size_bytes: 180000 + Math.round(Math.random()*900000), mime:'application/pdf', uploaded_at:ago(d), downloaded_at: dl ? ago(dl) : null, storage_path:''});
+  const R = (o) => ({id:uid(), token:uid(), possible_duplicate:false, files:[], updated_at:o.created_at, ...o});
+  return {requests: [
+    R({participant_name:'נועם בר', participant_id:'055512347', ref_name:'אורית גולן', ref_email:'orit.golan@example.co.il', ref_phone:'052-3456789', status:'submitted', created_at:ago(0), submitted_at:ago(0),
+       files:[f('committee','החלטת ועדה.pdf',0), f('psychiatric','psychiatric_report.pdf',0), f('social','דוח סוציאלי.pdf',0), f('idcard','tz.jpg',0)]}),
+    R({participant_name:'יוסי לוי', participant_id:'201234564', ref_name:'מירב שטרן', ref_email:'meirav@example.co.il', ref_phone:'054-7654321', status:'submitted', created_at:ago(3), submitted_at:ago(1),
+       files:[f('committee','vaada.pdf',3), f('psychiatric','דוח פסיכיאטרי 2026.pdf',2), f('social','psychosocial.pdf',1), f('medical','סיכום רפואי.pdf',1)]}),
+    R({participant_name:'רותם שחר', participant_id:'298765439', ref_name:'עידו ברק', ref_email:'ido.barak@example.co.il', ref_phone:'050-1112233', status:'in_progress', created_at:ago(12),
+       files:[f('psychiatric','psych.pdf',12), f('social','social_report.pdf',11)]}),
+    R({participant_name:'דנה כהן', participant_id:'034567891', ref_name:'שירה אדלר', ref_email:'shira.adler@example.co.il', ref_phone:'053-9876543', status:'in_progress', created_at:ago(9), last_reminder_at:ago(2),
+       files:[f('committee','החלטת ועדה - דנה.pdf',9)]}),
+    R({participant_name:'אבי מזרחי', participant_id:'312345671', ref_name:'טל נחום', ref_email:'tal.n@example.co.il', ref_phone:'058-4443322', status:'in_progress', created_at:ago(2), files:[]}),
+    R({participant_name:'מיכל אברהם', participant_id:'045678125', ref_name:'אורית גולן', ref_email:'orit.golan@example.co.il', ref_phone:'052-3456789', status:'approved', created_at:ago(16), submitted_at:ago(14), approved_at:ago(13), thanks_sent_at:ago(13),
+       folder_name:'מיכל אברהם - ' + dotDate(new Date(Date.now()-13*86400000)), last_download_at:ago(13), fully_downloaded_at:ago(13),
+       files:[f('committee','committee.pdf',16,13), f('psychiatric','psychiatric.pdf',15,13), f('social','social.pdf',14,13)]}),
+  ]};
+}
+
+/* =====================================================================
+   Shell: header + demo bar
+   ===================================================================== */
+function renderTop(who) {
+  $('#top').innerHTML = `<div class="top-in">
+      ${who ? `<div class="who"><span class="av" aria-hidden="true">${esc(CFG.noaName[0])}</span><span>${esc(CFG.noaName)}</span>
+        <button class="linkbtn" id="logout">יציאה</button></div>` : ''}
+      <a class="logo" href="https://www.amutatshavim.co.il/" target="_blank" rel="noopener" aria-label="עמותת שווים – לאתר העמותה"><img src="assets/logo.png" alt="שווים – עמותה לשיקום תעסוקתי"></a>
+    </div><div class="strip" aria-hidden="true"><i></i><i></i><i></i><i></i></div>`;
+  const lo = $('#logout'); if (lo) lo.onclick = async () => { await API.logout(); location.href = BASE_URL + '?noa'; };
+  if (DEMO) $('#demo').innerHTML = `<div class="demo-bar">מצב הדגמה — הנתונים נשמרים רק בדפדפן הזה. מעבר:
+    <a href="${BASE_URL}">טופס הגורם המפנה</a>·<a href="${BASE_URL}?noa">הדשבורד של נועה</a>·<button class="linkbtn" id="demo-reset">איפוס נתוני הדגמה</button></div>`;
+  const rs = $('#demo-reset'); if (rs) rs.onclick = () => { localStorage.removeItem(DEMO_KEY); location.reload(); };
+}
+
+/* =====================================================================
+   Modal
+   ===================================================================== */
+function modal(html, onMount) {
+  const layer = $('#layer'); const prev = document.activeElement;
+  const el = document.createElement('div'); el.className = 'modal'; el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true');
+  el.innerHTML = `<div class="mbox">${html}</div>`;
+  layer.appendChild(el);
+  const close = () => { el.remove(); document.removeEventListener('keydown', onKey); prev && prev.focus && prev.focus(); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  el.addEventListener('click', e => { if (e.target === el || e.target.closest('[data-close]')) close(); });
+  onMount && onMount(el, close);
+  const first = el.querySelector('[autofocus], button, textarea, input'); first && first.focus();
+  return close;
+}
+function ask(title, text, buttons) {
+  return new Promise(res => {
+    modal(`<h2>${esc(title)}</h2>${text ? `<p>${text}</p>` : ''}<div class="mbtns">${buttons.map((b,i) =>
+      `<button class="btn ${b.primary ? 'primary' : b.ghost ? 'ghost' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div>`,
+      (el, close) => {
+        el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { close(); res(buttons[+b.dataset.i].value); });
+        el.addEventListener('click', e => { if (e.target === el) res(null); });
+        document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { document.removeEventListener('keydown', k); res(null); } });
+      });
+  });
+}
+
+/* =====================================================================
+   REFERRER FORM
+   ===================================================================== */
+const F = {token:null, req:null, saved:null, activeDoc:null, refMailedTo:null};
+const FIELDS = [
+  {id:'participant_name', label:'שם מלא של המתמודד', group:1, auto:'off'},
+  {id:'participant_id', label:'מספר ת"ז של המתמודד', group:1, ltr:true, mode:'numeric', hint:'9 ספרות, כולל ספרת ביקורת'},
+  {id:'ref_name', label:'שם הגורם המפנה', group:2, auto:'name'},
+  {id:'ref_email', label:'מייל', group:2, ltr:true, type:'email', mode:'email', auto:'email', ph:'name@example.co.il', hint:'לכאן יישלח לינק להשלמה'},
+  {id:'ref_phone', label:'נייד', group:2, ltr:true, type:'tel', mode:'tel', auto:'tel', ph:'050-0000000'},
+];
+function fieldHtml(f) {
+  return `<div class="field" id="f-${f.id}">
+    <label for="${f.id}">${esc(f.label)} <span class="req" aria-hidden="true">*</span></label>
+    <input id="${f.id}" name="${f.id}" type="${f.type || 'text'}" ${f.mode ? `inputmode="${f.mode}"` : ''} ${f.auto ? `autocomplete="${f.auto}"` : ''}
+      ${f.ltr ? 'dir="ltr"' : ''} ${f.ph ? `placeholder="${esc(f.ph)}"` : ''} required aria-required="true" aria-describedby="e-${f.id}${f.hint ? ` h-${f.id}` : ''}">
+    ${f.hint ? `<div class="hint" id="h-${f.id}">${esc(f.hint)}</div>` : ''}
+    <div class="err" id="e-${f.id}" aria-live="polite"></div></div>`;
+}
+function readDetails() {
+  const v = id => $('#' + id).value;
+  return {participant_name: v('participant_name').trim().replace(/\s+/g,' '), participant_id: normTz(v('participant_id')),
+    ref_name: v('ref_name').trim().replace(/\s+/g,' '), ref_email: normEmail(v('ref_email')), ref_phone: phoneOk(v('ref_phone')) ? fmtPhone(v('ref_phone')) : v('ref_phone').trim()};
+}
+function validateField(id) {
+  const el = $('#' + id); const v = el.value; let msg = '';
+  if (!v.trim()) msg = 'שדה חובה';
+  else if (id === 'participant_id' && !tzOk(v)) msg = 'מספר ת"ז לא תקין — בדקו את 9 הספרות';
+  else if (id === 'ref_email' && !emailOk(v)) msg = 'כתובת מייל לא תקינה, למשל name@example.co.il';
+  else if (id === 'ref_phone' && !phoneOk(v)) msg = 'מספר נייד צריך להכיל 10 ספרות ולהתחיל ב-05';
+  else if ((id === 'participant_name' || id === 'ref_name') && v.trim().length < 2) msg = 'נא לכתוב שם מלא';
+  const box = $('#f-' + id), err = $('#e-' + id);
+  box.classList.toggle('bad', !!msg); el.setAttribute('aria-invalid', msg ? 'true' : 'false');
+  err.innerHTML = esc(msg);
+  if (!msg && id === 'ref_email') { const fx = emailFix(v); if (fx) err.innerHTML = `<span style="color:var(--ink);font-weight:500">התכוונת ל-<button type="button" class="fix ltr" data-fix="${esc(fx)}">${esc(fx)}</button>?</span>`; }
+  if (!msg && id === 'ref_phone') el.value = fmtPhone(v);
+  if (!msg && id === 'participant_id') el.value = normTz(v);
+  el.dataset.touched = '1';
+  return !msg;
+}
+function validateAll() {
+  let first = null;
+  FIELDS.forEach(f => { if (!validateField(f.id) && !first) first = f.id; });
+  if (first) { const el = $('#' + first); el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus({preventScroll:true}); }
+  return !first;
+}
+const sameDetails = (a, b) => a && b && FIELDS.every(f => a[f.id] === b[f.id]);
+
+async function startForm(token) {
+  renderTop(false);
+  if (token) {
+    try { F.req = await API.get(token); F.token = token; }
+    catch (e) { return renderNotFound(); }
+    if (F.req.status === 'approved') return renderClosed();
+  }
+  renderForm();
+}
+function renderNotFound() {
+  $('#app').innerHTML = `<div class="wrap"><div class="end"><h1>הלינק לא נמצא</h1>
+    <p>ייתכן שהלינק הועתק חלקית. אפשר לפתוח טופס חדש.</p><p><a class="btn" href="${BASE_URL}">לטופס חדש</a></p></div></div>`;
+}
+function renderClosed() {
+  $('#app').innerHTML = `<div class="wrap"><div class="end"><div class="big">${ICON_CHECK}</div>
+    <h1>כל המסמכים של ${esc(F.req.participant_name)} התקבלו</h1>
+    <p>${esc(CFG.noaName)} מעמותת שווים אישרה את קבלת המסמכים. תודה רבה!</p></div></div>`;
+}
+function renderForm() {
+  const r = F.req;
+  $('#app').innerHTML = `<div class="wrap">
+    <h1>טופס קליטת מתמודד חדש</h1>
+    <p class="lead">ממלאים את הפרטים ומעלים את מסמכי הקליטה. אפשר לשמור ולהשלים מאוחר יותר.</p>
+    ${r && r.status === 'submitted' ? `<div class="note wait">המסמכים כבר נשלחו ל${esc(CFG.noaName)}. אפשר להוסיף מסמך וללחוץ "שליחת העדכון".</div>` : ''}
+    <form id="form" novalidate>
+      <section class="card"><h2><span class="num">1</span>פרטי המתמודד</h2>
+        <div class="grid2">${FIELDS.filter(f => f.group === 1).map(fieldHtml).join('')}</div></section>
+      <section class="card"><h2><span class="num">2</span>פרטי הגורם המפנה</h2>
+        <div class="grid3">${FIELDS.filter(f => f.group === 2).map(fieldHtml).join('')}</div></section>
+      <section class="card"><h2><span class="num">3</span>מסמכים</h2>
+        <p class="lead" style="margin-top:-6px">PDF, תמונה או Word, עד ${MAX_MB}MB לקובץ. אפשר כמה קבצים לכל מסמך.</p>
+        <div id="docs"></div></section>
+      <div class="actions-bar" id="bar"></div>
+    </form>
+    <p class="foot">שאלות? ${esc(CFG.noaName)} מעמותת שווים ·
+      <a href="https://wa.me/${waPhone(CFG.whatsappBusiness)}" target="_blank" rel="noopener">WhatsApp <bdi class="ltr">${esc(CFG.whatsappBusiness)}</bdi></a> ·
+      <a href="mailto:${esc(CFG.noaEmail)}"><bdi class="ltr">${esc(CFG.noaEmail)}</bdi></a></p></div>`;
+
+  if (r) { FIELDS.forEach(f => $('#' + f.id).value = r[f.id] || ''); F.saved = readDetails(); }
+  FIELDS.forEach(f => {
+    const el = $('#' + f.id);
+    el.addEventListener('blur', () => { if (el.value.trim() || el.dataset.touched) validateField(f.id); });
+    el.addEventListener('input', () => { if (el.getAttribute('aria-invalid') === 'true') validateField(f.id); });
+  });
+  $('#form').addEventListener('click', e => { const b = e.target.closest('[data-fix]'); if (b) { $('#ref_email').value = b.dataset.fix; validateField('ref_email'); } });
+  $('#form').addEventListener('submit', e => e.preventDefault());
+  document.addEventListener('paste', onPaste);
+  renderDocs(); renderBar();
+}
+function renderDocs() {
+  const r = F.req || {files:[]};
+  $('#docs').innerHTML = DOCS.map(d => {
+    const fs = filesOf(r, d.key);
+    return `<div class="doc ${fs.length ? 'has' : ''}" data-doc="${d.key}" tabindex="-1">
+      <div class="doc-head"><span class="doc-name">${esc(d.label)}</span>
+        <span class="tag ${d.req ? 'req' : ''}">${d.req ? 'חובה' : 'רשות'}</span>
+        <span class="doc-state">${fs.length ? `<span class="ok-dot">${ICON_CHECK}</span>הועלה` : (d.req ? 'חסר' : '')}</span></div>
+      ${fs.length ? `<ul class="doc-files">${fs.map(f => `<li><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
+        <span class="fmeta">${fmtSize(f.size_bytes)}</span>
+        ${f.locked ? '<span class="fmeta x">התקבל</span>' : `<button type="button" class="linkbtn x" data-rm="${f.id}" aria-label="הסרת ${esc(f.original_name)}">הסרה</button>`}</li>`).join('')}</ul>` : ''}
+      <div class="doc-actions">
+        <button type="button" class="btn small" data-pick="${d.key}">${fs.length ? '+ קובץ נוסף' : '+ העלאת קובץ'}</button>
+        <span class="drop-hint">או גוררים קובץ לכאן</span>
+        <input type="file" class="sr" id="in-${d.key}" accept="${ACCEPT}" multiple tabindex="-1" aria-label="${esc(d.label)}">
+      </div><div class="doc-err" aria-live="polite"></div></div>`;
+  }).join('');
+  $$('.doc').forEach(box => {
+    const key = box.dataset.doc, input = $('#in-' + key);
+    box.querySelector('[data-pick]').onclick = () => { F.activeDoc = key; input.click(); };
+    input.onchange = () => { handleFiles(key, [...input.files]); input.value = ''; };
+    box.addEventListener('pointerenter', () => F.activeDoc = key);
+    box.addEventListener('dragover', e => { e.preventDefault(); box.classList.add('drag'); });
+    box.addEventListener('dragleave', () => box.classList.remove('drag'));
+    box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('drag'); handleFiles(key, [...e.dataTransfer.files]); });
+    box.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => {
+      busy(b, true);
+      try { F.req = await API.remove(F.token, b.dataset.rm); renderDocs(); renderBar(); toast('הקובץ הוסר'); }
+      catch { busy(b, false); toast('לא הצלחנו להסיר. נסו שוב.'); }
+    });
+  });
+}
+function renderBar() {
+  const r = F.req; const miss = r ? missingReq(r) : REQUIRED;
+  const resend = r && r.status === 'submitted';
+  $('#bar').innerHTML = `
+    <button type="button" class="btn primary" id="send" ${miss.length ? 'disabled aria-disabled="true"' : ''}>${resend ? 'שליחת העדכון' : 'שליחת המסמכים'}</button>
+    ${resend ? '' : `<button type="button" class="btn" id="later" ${r ? '' : 'disabled'}>שמירה והשלמה אחר כך</button>`}
+    <span class="missing">${miss.length ? 'חסרים מסמכי חובה: ' + miss.map(k => DOC[k].label).join(' · ') : 'כל מסמכי החובה הועלו ✓'}</span>`;
+  $('#send').onclick = onSend;
+  const l = $('#later'); if (l) l.onclick = onLater;
+}
+function onPaste(e) {
+  const files = [...(e.clipboardData?.files || [])]; if (!files.length || !$('#docs')) return;
+  if (!F.activeDoc) return toast('מצביעים קודם על המסמך שאליו להדביק');
+  e.preventDefault(); handleFiles(F.activeDoc, files);
+}
+async function ensureSaved() {
+  if (!validateAll()) { toast('קודם ממלאים את הפרטים המסומנים'); return false; }
+  const d = readDetails();
+  if (F.token && sameDetails(d, F.saved)) return true;
+  const res = await API.save(F.token, d);
+  const isNew = !F.token;
+  F.req = res; F.token = res.token; F.saved = d;
+  history.replaceState(null, '', `${BASE_URL}?r=${res.token}`);
+  if (isNew && res.merged) toast('מצאנו בקשה קיימת עבור ת"ז זו — ממשיכים ממנה');
+  if (F.refMailedTo !== d.ref_email) { F.refMailedTo = d.ref_email; mailToReferrer(res); }
+  return true;
+}
+async function handleFiles(key, files) {
+  const box = $(`.doc[data-doc="${key}"]`), err = box.querySelector('.doc-err');
+  err.textContent = ''; box.classList.remove('bad');
+  if (!files.length) return;
+  const bad = files.find(f => !EXT_MIME[extOf(f.name)] && !/^image\//.test(f.type));
+  const big = files.find(f => f.size > MAX_MB * 1024 * 1024);
+  if (bad) { err.textContent = `הקובץ "${bad.name}" לא נתמך. אפשר PDF, תמונה או Word.`; box.classList.add('bad'); return; }
+  if (big) { err.textContent = `הקובץ "${big.name}" גדול מ-${MAX_MB}MB.`; box.classList.add('bad'); return; }
+  const pick = box.querySelector('[data-pick]');
+  try {
+    busy(pick, true);
+    if (!(await ensureSaved())) return;
+    for (let i = 0; i < files.length; i++) {
+      pick.textContent = files.length > 1 ? `מעלה ${i+1} מתוך ${files.length}…` : 'מעלה…';
+      F.req = await API.upload(F.token, key, files[i]);
+    }
+    renderDocs(); renderBar();
+    toast(files.length > 1 ? `${files.length} קבצים הועלו: ${DOC[key].label}` : `הועלה: ${DOC[key].label}`);
+  } catch (e) {
+    console.error(e);
+    const b = $(`.doc[data-doc="${key}"]`);
+    if (b) { b.classList.add('bad'); b.querySelector('.doc-err').textContent = 'ההעלאה לא הצליחה. בדקו את החיבור ונסו שוב.'; const p = b.querySelector('[data-pick]'); busy(p, false); p.textContent = '+ העלאת קובץ'; }
+  }
+}
+async function onSend(e) {
+  const btn = e.currentTarget; busy(btn, true);
+  try {
+    if (!(await ensureSaved())) { busy(btn, false); return; }
+    const wasSubmitted = F.req.status === 'submitted';
+    F.req = await API.submit(F.token);
+    await mailToNoa({...F.req, _resend: wasSubmitted}, 'submit');
+    renderThanks();
+  } catch (err) { console.error(err); busy(btn, false); toast('השליחה לא הצליחה. כל מה שהעליתם נשמר — נסו שוב.'); }
+}
+async function onLater(e) {
+  const btn = e.currentTarget; busy(btn, true);
+  try {
+    if (!(await ensureSaved())) { busy(btn, false); return; }
+    await mailToNoa(F.req, 'partial');
+    renderSaved();
+  } catch (err) { console.error(err); busy(btn, false); toast('השמירה לא הצליחה. נסו שוב.'); }
+}
+function endScreen(title, text, showLink) {
+  document.removeEventListener('paste', onPaste);
+  const link = contLink(F.req);
+  $('#app').innerHTML = `<div class="wrap"><div class="end">
+    <div class="big">${ICON_CHECK}</div><h1>${title}</h1><p>${text}</p>
+    ${showLink ? `<div class="copyrow"><input readonly value="${esc(link)}" aria-label="הלינק האישי להשלמה"><button class="btn" id="cp">העתקה</button></div>` : ''}
+    <p style="margin-top:22px"><a class="btn" href="${esc(link)}">חזרה לטופס</a></p></div></div>`;
+  window.scrollTo(0, 0);
+  const cp = $('#cp'); if (cp) cp.onclick = async () => { await copyText(link); toast('הלינק הועתק'); };
+}
+function renderThanks() {
+  endScreen(`תודה! המסמכים של ${esc(F.req.participant_name)} נשלחו`,
+    `${esc(CFG.noaName)} מעמותת שווים תעבור עליהם ותעדכן אותך במייל. צריך להוסיף מסמך? אפשר דרך הלינק שנשלח אליך במייל.`, false);
+}
+function renderSaved() {
+  const miss = missingReq(F.req);
+  endScreen('נשמר. אפשר להשלים אחר כך',
+    `שלחנו לינק אישי להשלמה אל <bdi class="ltr">${esc(F.req.ref_email)}</bdi>.${miss.length ? ` עוד חסרים: ${miss.map(k => esc(DOC[k].label)).join(' · ')}.` : ''}`, true);
+}
+
+/* =====================================================================
+   NOA — login
+   ===================================================================== */
+async function startNoa() {
+  const s = await API.session().catch(() => null);
+  if (!s) return renderLogin();
+  renderTop(true); D.openId = new URLSearchParams(location.search).get('open') || null;
+  loadDash();
+}
+function renderLogin() {
+  renderTop(false);
+  $('#app').innerHTML = `<div class="login"><h1>כניסה לדשבורד</h1>
+    <p class="lead">${DEMO ? 'מצב הדגמה: כל סיסמה עובדת.' : 'כניסה פעם אחת בכל מחשב.'}</p>
+    <form id="lf" novalidate>
+      <div class="field" style="margin-bottom:14px"><label for="le">מייל</label>
+        <input id="le" type="email" dir="ltr" autocomplete="username" value="${esc(CFG.noaEmail)}"></div>
+      <div class="field"><label for="lp">סיסמה</label>
+        <div class="pw"><input id="lp" type="password" dir="ltr" autocomplete="current-password" aria-describedby="lerr">
+        <button type="button" class="eye" id="eye" aria-label="הצגת הסיסמה">${ICON_EYE}</button></div>
+        <div class="err" id="lerr" aria-live="polite"></div></div>
+      <button class="btn primary" id="lb" style="width:100%;margin-top:18px">כניסה</button></form></div>`;
+  $('#eye').onclick = () => { const p = $('#lp'); p.type = p.type === 'password' ? 'text' : 'password'; };
+  $('#lp').focus();
+  $('#lf').onsubmit = async e => {
+    e.preventDefault(); const b = $('#lb'); busy(b, true); $('#lerr').textContent = '';
+    try { await API.login(normEmail($('#le').value), $('#lp').value); startNoa(); }
+    catch { busy(b, false); $('#lerr').textContent = 'המייל או הסיסמה לא נכונים'; }
+  };
+}
+
+/* =====================================================================
+   NOA — dashboard
+   ===================================================================== */
+const D = {list:[], filter:'all', q:'', openId:null, flashId:null};
+const FILTERS = [
+  {id:'all', label:'הכל', test:() => true},
+  {id:'in_progress', label:'בתהליך', test:r => r.status === 'in_progress'},
+  {id:'late', label:`ממתינים ${OVERDUE_DAYS}+ ימים`, test:isLate},
+  {id:'submitted', label:'ממתין לאישור', test:r => r.status === 'submitted'},
+  {id:'approved', label:'אושר', test:r => r.status === 'approved'},
+];
+const ORDER = {submitted:0, in_progress:1, approved:2};
+function sortList(a) {
+  return a.sort((x, y) => ORDER[x.status] - ORDER[y.status] ||
+    (x.status === 'in_progress' ? new Date(x.created_at) - new Date(y.created_at) : new Date(y.submitted_at || y.created_at) - new Date(x.submitted_at || x.created_at)));
+}
+async function loadDash(silent) {
+  if (!silent) $('#app').innerHTML = '<div class="loading">טוען בקשות…</div>';
+  try { D.list = sortList(await API.list()); }
+  catch (e) { console.error(e); $('#app').innerHTML = `<div class="wrap wide"><div class="empty">לא הצלחנו לטעון את הבקשות. בדקי את החיבור לאינטרנט.<br><br><button class="btn" onclick="loadDash()">ניסיון נוסף</button></div></div>`; return; }
+  await autoPurge();
+  renderDash();
+  if (D.openId) { const r = D.list.find(x => x.id === D.openId); if (r) openDrawer(r.id); else D.openId = null; }
+}
+async function autoPurge() {
+  const due = D.list.filter(r => r.status === 'approved' && r.fully_downloaded_at && !r.purged_at && daysSince(r.fully_downloaded_at) >= PURGE_DAYS);
+  for (const r of due) {
+    try { await API.purge(r); const now = new Date().toISOString(); await API.update(r.id, {purged_at: now}); r.purged_at = now; }
+    catch (e) { console.warn('purge failed', e); }
+  }
+}
+async function folderLabel() {
+  if (!('showDirectoryPicker' in window)) return `<span>ההורדה לתיקייה עובדת ב-Chrome או Edge במחשב.</span>`;
+  const h = await idb.get('kv', 'root').catch(() => null);
+  return h ? `<span>ההורדות נשמרות בתיקייה <b>${esc(h.name)}</b></span><button class="linkbtn" id="chdir">החלפת תיקייה</button>`
+           : `<span>עוד לא נבחרה תיקייה להורדות.</span><button class="linkbtn" id="chdir" style="color:var(--ink)">בחירת תיקייה</button>`;
+}
+function renderDash() {
+  const counts = Object.fromEntries(FILTERS.map(f => [f.id, D.list.filter(f.test).length]));
+  $('#app').innerHTML = `<div class="wrap wide">
+    <div class="dash-head"><h1>בקשות קליטה</h1>
+      <div class="share">
+        <button class="btn small" id="cplink">העתקת הלינק לטופס</button>
+        <button class="btn small" id="walink">שליחה ב-WhatsApp</button>
+        <button class="btn small" id="mllink">שליחה במייל</button></div></div>
+    <div class="folderline" id="folderline"></div>
+    <div class="toolbar">
+      <div class="chips" role="group" aria-label="סינון">${FILTERS.map(f =>
+        `<button class="chip" data-f="${f.id}" aria-pressed="${D.filter === f.id}">${esc(f.label)}<span class="n">${counts[f.id]}</span></button>`).join('')}</div>
+      <label class="search"><span class="sr">חיפוש</span><input id="q" type="search" placeholder="חיפוש לפי שם, ת״ז או גורם מפנה" value="${esc(D.q)}"></label>
+    </div>
+    <div class="list" id="list"></div></div>`;
+  folderLabel().then(html => {
+    const fl = $('#folderline'); if (!fl) return; fl.innerHTML = html;
+    const ch = $('#chdir'); if (ch) ch.onclick = () => pickRoot().then(() => renderDash());
+  });
+  $$('.chip').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); });
+  $('#q').oninput = e => { D.q = e.target.value; renderRows(); };
+  $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
+  $('#walink').onclick = () => window.open(`https://wa.me/?text=${encodeURIComponent(linkMsg(true))}`, '_blank', 'noopener');
+  $('#mllink').onclick = () => { location.href = `mailto:?subject=${encodeURIComponent('טופס קליטת מתמודד חדש – עמותת שווים')}&body=${encodeURIComponent(linkMsg(false))}`; };
+  renderRows();
+}
+function linkMsg(wa) {
+  const b = s => wa ? `*${s}*` : s;
+  return `שלום,\nלקליטת מתמודד חדש ב${b('עמותת שווים')} יש למלא את הטופס ולהעלות את מסמכי הקליטה כאן:\n${BASE_URL}\n\nמסמכי חובה: טופס החלטת ועדה, דוח פסיכיאטרי עדכני, דוח סוציאלי/פסיכוסוציאלי.\nאפשר לשמור ולהשלים אחר כך.\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
+}
+function pillsHtml(r) {
+  const req = REQUIRED.filter(k => filesOf(r, k).length).length;
+  return `<span class="pills">${DOCS.map(d => { const on = filesOf(r, d.key).length > 0;
+    return `<span class="pill ${on ? 'on' : ''} ${d.req ? '' : 'opt'}" title="${esc(d.label)}${on ? ' – הועלה' : ' – חסר'}">${on ? ICON_CHECK : ''}</span>`; }).join('')}
+    <span class="cnt">${req}/${REQUIRED.length}</span></span>`;
+}
+function foldHtml(r) {
+  const fs = r.files || []; const done = fs.filter(f => f.downloaded_at).length;
+  if (!fs.length || !done) return '<span class="fold">—</span>';
+  return done === fs.length ? '<span class="fold full">בתיקייה ✓</span>' : `<span class="fold">חלקי ${done}/${fs.length}</span>`;
+}
+function renderRows() {
+  const f = FILTERS.find(x => x.id === D.filter); const q = D.q.trim().toLowerCase();
+  const rows = D.list.filter(f.test).filter(r => !q || [r.participant_name, r.participant_id, r.ref_name, r.ref_email].some(v => String(v).toLowerCase().includes(q)));
+  const head = `<div class="lrow head" aria-hidden="true"><span>מתמודד</span><span>גורם מפנה</span><span>מסמכים (חובה)</span><span>נפתח</span><span>סטטוס</span><span>בתיקייה</span></div>`;
+  if (!D.list.length) { $('#list').innerHTML = `<div class="empty">עוד אין בקשות. שולחים לגורם המפנה את הלינק לטופס — הבקשה תופיע כאן ברגע שיתחיל למלא.</div>`; return; }
+  if (!rows.length) { $('#list').innerHTML = head + `<div class="empty">אין בקשות שמתאימות לסינון.</div>`; return; }
+  $('#list').innerHTML = head + rows.map(r => {
+    const late = isLate(r);
+    return `<button class="lrow ${D.flashId === r.id ? 'flash' : ''}" data-id="${r.id}">
+      <span class="c-n"><span class="pname">${esc(r.participant_name)}</span><br><span class="sub ltr">${esc(r.participant_id)}</span>${r.possible_duplicate ? ' <span class="sub">· ת״ז קיימת בבקשה אחרת</span>' : ''}</span>
+      <span class="c-r">${esc(r.ref_name)}<br><span class="sub">${esc(r.ref_phone)}</span></span>
+      <span class="c-p">${pillsHtml(r)}</span>
+      <span class="c-d">${fmtDate(r.created_at)}<br><span class="sub">${daysAgoTxt(daysSince(r.created_at))}</span></span>
+      <span class="c-s"><span class="badge ${STATUS[r.status].cls}">${STATUS[r.status].label}</span>${late ? `<br><span class="late">ממתין ${daysSince(r.created_at)} ימים</span>` : ''}</span>
+      <span class="c-f">${foldHtml(r)}</span></button>`;
+  }).join('');
+  D.flashId = null;
+  $$('.lrow[data-id]').forEach(b => b.onclick = () => openDrawer(b.dataset.id));
+}
+
+/* ---------- drawer ---------- */
+function closeDrawer() {
+  $$('.scrim,.drawer').forEach(e => e.remove()); document.removeEventListener('keydown', drawerKey);
+  const id = D.openId; D.openId = null; history.replaceState(null, '', BASE_URL + '?noa');
+  const row = id && $(`.lrow[data-id="${id}"]`); row && row.focus();
+}
+function drawerKey(e) { if (e.key === 'Escape' && !$('.modal')) closeDrawer(); }
+function openDrawer(id) {
+  const r = D.list.find(x => x.id === id); if (!r) return;
+  D.openId = id; history.replaceState(null, '', `${BASE_URL}?noa&open=${id}`);
+  $$('.scrim,.drawer').forEach(e => e.remove());
+  const scrim = document.createElement('div'); scrim.className = 'scrim'; scrim.onclick = closeDrawer;
+  const dr = document.createElement('aside'); dr.className = 'drawer'; dr.setAttribute('role','dialog'); dr.setAttribute('aria-modal','true'); dr.setAttribute('aria-label', r.participant_name);
+  document.body.append(scrim, dr); document.addEventListener('keydown', drawerKey);
+  fillDrawer(r, dr);
+  dr.querySelector('#back').focus();
+}
+function fillDrawer(r, dr = $('.drawer')) {
+  const miss = missingReq(r), fs = r.files || [], pending = fs.filter(f => !f.downloaded_at);
+  const purged = !!r.purged_at;
+  let primary = '', why = '';
+  if (r.status === 'submitted') primary = `<button class="btn primary" id="approve">אישור קבלת המסמכים</button>`;
+  else if (r.status === 'in_progress') { primary = `<button class="btn primary" id="remind">שליחת תזכורת</button>`; why = `אפשר לאשר אחרי שיגיעו כל מסמכי החובה (חסרים ${miss.length}).`; }
+  else if (!r.thanks_sent_at) primary = `<button class="btn primary" id="thanks">שליחת תודה לגורם המפנה</button>`;
+  const dl = !purged && pending.length ? `<button class="btn" id="dl">הורדה לתיקייה (${pending.length})</button>` : '';
+  const hist = [
+    ['נפתח', r.created_at], ['נשלח', r.submitted_at], ['תזכורת אחרונה', r.last_reminder_at], ['אושר', r.approved_at],
+    ['תודה נשלחה', r.thanks_sent_at], ['הורדה אחרונה', r.last_download_at], ['נמחק מהענן', r.purged_at]].filter(x => x[1]).map(x => `${x[0]}: ${fmtDate(x[1])}`).join(' · ');
+  dr.innerHTML = `<div class="dr-top"><button class="btn ghost small" id="back">→ חזרה לכל הבקשות</button></div>
+    <div class="dr-body">
+      <span class="badge ${STATUS[r.status].cls}">${STATUS[r.status].label}</span>
+      ${isLate(r) ? `<span class="late" style="margin-inline-start:10px">ממתין ${daysSince(r.created_at)} ימים</span>` : ''}
+      <h1 style="margin-top:10px">${esc(r.participant_name)}</h1>
+      <dl class="kv">
+        <dt>ת"ז</dt><dd><bdi class="ltr">${esc(r.participant_id)}</bdi>${r.possible_duplicate ? ' · <span class="sub">ת״ז זו קיימת גם בבקשה אחרת</span>' : ''}</dd>
+        <dt>גורם מפנה</dt><dd>${esc(r.ref_name)}</dd>
+        <dt>נייד</dt><dd><a href="https://wa.me/${waPhone(r.ref_phone)}" target="_blank" rel="noopener"><bdi class="ltr">${esc(r.ref_phone)}</bdi></a></dd>
+        <dt>מייל</dt><dd><a href="mailto:${esc(r.ref_email)}"><bdi class="ltr">${esc(r.ref_email)}</bdi></a></dd>
+        ${r.folder_name ? `<dt>תיקייה</dt><dd>${esc(r.folder_name)}</dd>` : ''}
+      </dl>
+      <div class="sec-title">מסמכים</div>
+      ${purged ? `<div class="note plain">הקבצים נמחקו מהענן ${PURGE_DAYS} ימים אחרי ההורדה. העותק נמצא בתיקייה במחשב.</div>` : ''}
+      <div class="dlist">${DOCS.map(d => { const list = filesOf(r, d.key);
+        return `<div class="ditem"><div class="dh">${esc(d.label)} ${d.req ? '' : '<span class="tag">רשות</span>'}
+          ${list.length ? '' : `<span class="miss ${d.req ? 'r' : ''}">${d.req ? 'חסר' : 'לא הועלה'}</span>`}</div>
+          ${list.map(f => `<div class="frow"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
+            <span class="sub">${fmtSize(f.size_bytes)} · ${fmtDate(f.uploaded_at)}</span>
+            ${f.downloaded_at ? '<span class="in">בתיקייה ✓</span>' : '<span class="new">חדש</span>'}
+            ${purged ? '' : `<button class="linkbtn x" data-view="${f.id}">צפייה</button>`}</div>`).join('')}</div>`; }).join('')}</div>
+      <div class="hist">${hist}</div>
+      <div class="danger"><button class="linkbtn" id="del">מחיקת הבקשה</button></div>
+    </div>
+    ${primary || dl ? `<div class="dr-actions">${primary}${dl}${why ? `<span class="why">${why}</span>` : ''}</div>` : ''}`;
+  dr.querySelector('#back').onclick = closeDrawer;
+  dr.querySelectorAll('[data-view]').forEach(b => b.onclick = async () => {
+    const f = fs.find(x => x.id === b.dataset.view); const w = window.open('', '_blank');
+    try { const url = await API.viewUrl(f); if (w) w.location = url; else window.open(url, '_blank'); }
+    catch { w && w.close(); toast('לא הצלחנו לפתוח את הקובץ'); }
+  });
+  const on = (id, fn) => { const b = dr.querySelector('#' + id); if (b) b.onclick = e => fn(r, e.currentTarget); };
+  on('approve', doApprove); on('remind', doRemind); on('thanks', doThanks); on('dl', doDownload); on('del', doDelete);
+}
+async function refresh(r) {
+  await loadDash(true);
+  D.openId = r.id;
+  const nr = D.list.find(x => x.id === r.id);
+  if (nr && $('.drawer')) fillDrawer(nr); else if (nr) openDrawer(nr.id);
+  return nr;
+}
+
+/* ---------- messages Noa sends herself ---------- */
+function reminderText(r, wa) {
+  const b = s => wa ? `*${s}*` : s; const miss = missingReq(r);
+  return `שלום ${r.ref_name},\nתזכורת קטנה מ${b('עמותת שווים')}: עדיין חסרים מסמכי הקליטה של ${b(r.participant_name)}:\n${miss.map(k => '• ' + DOC[k].label).join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
+}
+function thanksText(r) {
+  return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\n\n${CFG.noaName} · עמותת שווים`;
+}
+function composeAndSend(r, {title, subject, textFor, stamp}) {
+  return new Promise(resolve => {
+    modal(`<h2>${esc(title)}</h2><p>אפשר לערוך את ההודעה לפני השליחה. היא תיפתח אצלך, ואת לוחצת "שלח".</p>
+      <label class="sr" for="msg">ההודעה</label><textarea class="textarea" id="msg" style="width:100%"></textarea>
+      <div class="mbtns"><button class="btn primary" id="viaWa">שליחה ב-WhatsApp</button><button class="btn" id="viaMail">שליחה במייל</button>
+      <button class="btn ghost" data-close>ביטול</button></div>`, (el, close) => {
+        const ta = el.querySelector('#msg'); ta.value = textFor(r, true);
+        const go = async via => {
+          const txt = ta.value;
+          if (via === 'wa') window.open(`https://wa.me/${waPhone(r.ref_phone)}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener');
+          else location.href = `mailto:${encodeURIComponent(r.ref_email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(txt.replace(/\*/g, ''))}`;
+          close();
+          await API.update(r.id, {[stamp]: new Date().toISOString()});
+          resolve(true);
+        };
+        el.querySelector('#viaWa').onclick = () => go('wa');
+        el.querySelector('#viaMail').onclick = () => go('mail');
+        el.addEventListener('click', e => { if (e.target === el || e.target.closest('[data-close]')) resolve(false); });
+      });
+  });
+}
+async function doRemind(r) {
+  const sent = await composeAndSend(r, {title:`תזכורת ל${r.ref_name}`, subject:`תזכורת: מסמכי הקליטה של ${r.participant_name} – עמותת שווים`, textFor:reminderText, stamp:'last_reminder_at'});
+  if (sent) { await refresh(r); toast(`התזכורת נפתחה לשליחה ל${r.ref_name}`); }
+}
+async function doThanks(r) {
+  const sent = await composeAndSend(r, {title:`הודעת תודה ל${r.ref_name}`, subject:`מסמכי הקליטה של ${r.participant_name} התקבלו – עמותת שווים`, textFor:thanksText, stamp:'thanks_sent_at'});
+  if (sent) { await refresh(r); toast(`הודעת התודה נפתחה לשליחה ל${r.ref_name}`); }
+}
+async function doApprove(r, btn) {
+  busy(btn, true);
+  try { await API.update(r.id, {status:'approved', approved_at:new Date().toISOString()}); }
+  catch { busy(btn, false); return toast('האישור לא נשמר. נסי שוב.'); }
+  D.flashId = r.id; const nr = await refresh(r);
+  toast(`הבקשה של ${r.participant_name} אושרה`);
+  const go = await ask('לשלוח תודה לגורם המפנה?', `"תודה רבה, כל מסמכי הקליטה של ${esc(r.participant_name)} התקבלו."`,
+    [{label:'כן, לשלוח', value:true, primary:true}, {label:'לא עכשיו', value:false, ghost:true}]);
+  if (go) doThanks(nr || r);
+}
+async function doDelete(r) {
+  const ok = await ask('למחוק את הבקשה?', `הבקשה של ${esc(r.participant_name)} והקבצים שלה יימחקו מהמערכת. קבצים שכבר הורדו לתיקייה נשארים במחשב. אי אפשר לבטל.`,
+    [{label:'מחיקה', value:true}, {label:'ביטול', value:false, ghost:true}]);
+  if (!ok) return;
+  try { await API.destroy(r); closeDrawer(); await loadDash(true); toast('הבקשה נמחקה'); }
+  catch { toast('המחיקה לא הצליחה. נסי שוב.'); }
+}
+
+/* =====================================================================
+   Download to the network folder (File System Access API)
+   ===================================================================== */
+async function pickRoot() {
+  if (!('showDirectoryPicker' in window)) { toast('צריך Chrome או Edge במחשב'); return null; }
+  try {
+    const h = await window.showDirectoryPicker({id:'shavim-intake', mode:'readwrite'});
+    await idb.set('kv', 'root', h); toast(`נבחרה התיקייה: ${h.name}`); return h;
+  } catch (e) { if (e.name !== 'AbortError') toast('לא הצלחנו לבחור את התיקייה'); return null; }
+}
+async function getRoot() {
+  let h = await idb.get('kv', 'root').catch(() => null);
+  if (!h) {
+    const go = await ask('בוחרים פעם אחת את תיקיית ההורדות',
+      `בחלון שייפתח, עוברים לתיקייה הזו ולוחצים "בחירת תיקייה":<div class="path">\\\\JAACOV\\Documents\\נועה\\טפסי קליטת מתמודד חדש</div>אם הדפדפן ישאל — מאשרים "עריכת קבצים".`,
+      [{label:'בחירת תיקייה', value:true, primary:true}, {label:'ביטול', value:false, ghost:true}]);
+    if (!go) return null;
+    h = await pickRoot(); if (!h) return null;
+  }
+  let perm = await h.queryPermission({mode:'readwrite'});
+  if (perm !== 'granted') perm = await h.requestPermission({mode:'readwrite'}).catch(() => 'denied');
+  if (perm !== 'granted') {
+    const again = await ask('אין הרשאה לתיקייה', 'הדפדפן צריך אישור לשמור קבצים בתיקייה. לנסות שוב?', [{label:'לאשר גישה', value:true, primary:true}, {label:'ביטול', value:false, ghost:true}]);
+    if (!again) return null;
+    perm = await h.requestPermission({mode:'readwrite'}).catch(() => 'denied');
+    if (perm !== 'granted') { toast('בלי הרשאה אי אפשר לשמור בתיקייה'); return null; }
+  }
+  return h;
+}
+async function findFolder(root, r) {
+  if (r.folder_name) { try { return await root.getDirectoryHandle(r.folder_name); } catch {} }
+  const base = safeName(r.participant_name); const found = [];
+  for await (const [name, h] of root.entries()) if (h.kind === 'directory' && (name === base || name.startsWith(base + ' - '))) found.push(h);
+  if (found.length) {
+    const choice = await new Promise(res => modal(`<h2>נמצאה תיקייה בשם הזה</h2><p>להוסיף את המסמכים לתיקייה קיימת, או לפתוח תיקייה חדשה?</p>
+      <div class="pick">${found.map((h, i) => `<button class="btn" data-k="${i}">הוספה אל: ${esc(h.name)}</button>`).join('')}
+      <button class="btn" data-k="new">תיקייה חדשה: ${esc(base)} - ${dotDate()}</button><button class="btn ghost" data-k="cancel">ביטול</button></div>`,
+      (el, close) => { el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { close(); res(b.dataset.k); });
+        el.addEventListener('click', e => { if (e.target === el) res('cancel'); }); }));
+    if (choice === 'cancel' || choice == null) return null;
+    if (choice !== 'new') return found[+choice];
+  }
+  let name = `${base} - ${dotDate()}`, n = 2;
+  while (true) { try { await root.getDirectoryHandle(name); name = `${base} - ${dotDate()} (${n++})`; } catch { break; } }
+  return root.getDirectoryHandle(name, {create:true});
+}
+async function uniqueFile(dir, stem, ext) {
+  let name = `${stem}.${ext}`, n = 2;
+  while (true) { try { await dir.getFileHandle(name); name = `${stem} (${n++}).${ext}`; } catch { return dir.getFileHandle(name, {create:true}); } }
+}
+async function doDownload(r, btn) {
+  if (!('showDirectoryPicker' in window)) return ask('צריך Chrome או Edge', 'ההורדה לתיקייה ברשת עובדת רק בדפדפן Chrome או Edge במחשב.', [{label:'הבנתי', value:true}]);
+  const root = await getRoot(); if (!root) return;
+  const dir = await findFolder(root, r); if (!dir) return;
+  const pending = (r.files || []).filter(f => !f.downloaded_at);
+  busy(btn, true); const done = [];
+  try {
+    for (let i = 0; i < pending.length; i++) {
+      const f = pending[i]; btn.textContent = `שומר ${i+1} מתוך ${pending.length}…`;
+      const blob = await API.blob(f);
+      const fh = await uniqueFile(dir, safeName(`${DOC[f.doc_type].label} - ${r.participant_name}`), extOf(f.original_name) || 'pdf');
+      const w = await fh.createWritable(); await w.write(blob); await w.close();
+      done.push(f.id);
+    }
+  } catch (e) { console.error(e); toast(`נשמרו ${done.length} מתוך ${pending.length}. הקבצים האחרים לא נשמרו — נסי שוב.`, 5000); }
+  if (done.length) {
+    const now = new Date().toISOString();
+    await API.markFiles(done, {downloaded_at: now});
+    const all = done.length === pending.length;
+    await API.update(r.id, {folder_name: dir.name, last_download_at: now, fully_downloaded_at: all ? now : null});
+    if (all) toast(`${done.length} קבצים נשמרו בתיקייה "${dir.name}"`, 4500);
+  }
+  await refresh(r);
+}
+
+/* =====================================================================
+   Router
+   ===================================================================== */
+(function route() {
+  const p = new URLSearchParams(location.search);
+  if (p.has('noa')) { document.title = 'שווים · דשבורד קליטה'; startNoa(); }
+  else startForm(p.get('r'));
+})();
+</script>
+</body>
+</html>
