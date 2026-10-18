@@ -850,12 +850,15 @@ function renderLogin() {
    NOA — dashboard
    ===================================================================== */
 const D = {list:[], filter:'all', q:'', openId:null, flashId:null};
+// archived requests appear only under "ארכיון"
+const live = r => !r.archived_at;
 const FILTERS = [
-  {id:'all', label:'הכל', test:() => true},
-  {id:'in_progress', label:'בתהליך', test:r => r.status === 'in_progress'},
-  {id:'late', label:`ממתינים ${OVERDUE_DAYS}+ ימים`, test:isLate},
-  {id:'submitted', label:'ממתין לאישור', test:r => r.status === 'submitted'},
-  {id:'approved', label:'אושר', test:r => r.status === 'approved'},
+  {id:'all', label:'הכל', test:live},
+  {id:'in_progress', label:'בתהליך', test:r => live(r) && r.status === 'in_progress'},
+  {id:'late', label:`ממתינים ${OVERDUE_DAYS}+ ימים`, test:r => live(r) && isLate(r)},
+  {id:'submitted', label:'ממתין לאישור', test:r => live(r) && r.status === 'submitted'},
+  {id:'approved', label:'אושר', test:r => live(r) && r.status === 'approved'},
+  {id:'archived', label:'ארכיון', test:r => !!r.archived_at},
 ];
 const ORDER = {submitted:0, in_progress:1, approved:2};
 function sortList(a) {
@@ -998,7 +1001,7 @@ function fillDrawer(r, dr = $('.drawer')) {
             ${f.downloaded_at ? '<span class="in">בתיקייה ✓</span>' : '<span class="new">חדש</span>'}
             ${purged ? '' : `<button class="linkbtn x" data-view="${f.id}">צפייה</button>`}</div>`).join('')}</div>`; }).join('')}</div>
       <div class="hist">${hist}</div>
-      <div class="danger"><button class="linkbtn" id="del">מחיקת הבקשה</button></div>
+      <div class="danger">${r.status === 'approved' ? `<button class="linkbtn" id="arch">${r.archived_at ? 'החזרה מהארכיון' : 'העברה לארכיון'}</button> · ` : ''}<button class="linkbtn" id="del">מחיקת הבקשה</button></div>
     </div>
     ${primary || dl ? `<div class="dr-actions">${primary}${dl}${why ? `<span class="why">${why}</span>` : ''}</div>` : ''}`;
   dr.querySelector('#back').onclick = closeDrawer;
@@ -1008,7 +1011,7 @@ function fillDrawer(r, dr = $('.drawer')) {
     catch { w && w.close(); toast('לא הצלחנו לפתוח את הקובץ'); }
   });
   const on = (id, fn) => { const b = dr.querySelector('#' + id); if (b) b.onclick = e => fn(r, e.currentTarget); };
-  on('approve', doApprove); on('remind', doRemind); on('thanks', doThanks); on('dl', doDownload); on('del', doDelete);
+  on('approve', doApprove); on('remind', doRemind); on('thanks', doThanks); on('dl', doDownload); on('del', doDelete); on('arch', doArchive);
 }
 async function refresh(r) {
   await loadDash(true);
@@ -1070,6 +1073,13 @@ async function doApprove(r, btn) {
   const go = await ask('לשלוח תודה לגורם המפנה?', `"תודה רבה, כל מסמכי הקליטה של ${esc(r.participant_name)} התקבלו."`,
     [{label:'כן, לשלוח', value:true, primary:true}, {label:'לא עכשיו', value:false, ghost:true}]);
   if (go) doThanks(nr || r);
+}
+async function doArchive(r, btn) {
+  const out = !r.archived_at; busy(btn, true);
+  try { await API.update(r.id, {archived_at: out ? new Date().toISOString() : null}); }
+  catch { busy(btn, false); return toast('לא הצלחנו לעדכן. נסי שוב.'); }
+  closeDrawer(); await loadDash(true);
+  toast(out ? `הבקשה של ${r.participant_name} הועברה לארכיון` : `הבקשה של ${r.participant_name} חזרה לרשימה`);
 }
 async function doDelete(r) {
   const ok = await ask('למחוק את הבקשה?', `הבקשה של ${esc(r.participant_name)} והקבצים שלה יימחקו מהמערכת. קבצים שכבר הורדו לתיקייה נשארים במחשב. אי אפשר לבטל.`,

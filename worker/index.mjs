@@ -21,10 +21,12 @@ const REQUIRED = ['committee', 'psychiatric', 'social'];
 const MAX_BYTES = 15 * 1024 * 1024;
 const MAX_FILES_PER_REQUEST = 20;
 const SESSION_DAYS = 30;
-const LOGIN_LIMIT = 5, LOGIN_WINDOW_MIN = 15;
+const LOGIN_LIMIT = 5, LOGIN_WINDOW_MIN = 15, LOGIN_GLOBAL_LIMIT = 30;   // failures per 15 min: per IP / all IPs
+const CREATE_PER_IP_HOUR = 10, CREATE_PER_DAY = 200;                      // new requests from the anonymous form
 const EXT_MIME = {pdf:'application/pdf', jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', webp:'image/webp', heic:'image/heic', heif:'image/heif',
   doc:'application/msword', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
-const STAFF_FIELDS = ['status', 'approved_at', 'thanks_sent_at', 'last_reminder_at', 'folder_name', 'last_download_at', 'fully_downloaded_at', 'purged_at'];
+const STAFF_FIELDS = ['status', 'approved_at', 'thanks_sent_at', 'last_reminder_at', 'folder_name', 'last_download_at', 'fully_downloaded_at', 'archived_at'];
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;   // canonical timestamps only (cleanup compares text)
 
 class HttpError extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } }
 const must = (cond, code, status = 400) => { if (!cond) throw new HttpError(status, code); };
@@ -32,6 +34,8 @@ const now = () => new Date().toISOString();
 const uid = () => crypto.randomUUID();
 const randomToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
 async function sha256(s) { const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, '0')).join(''); }
+// compares fixed-length digests, so timing does not depend on the input
+async function sameSecret(a, b) { return safeEqual(await sha256(String(a)), await sha256(String(b))); }
 function safeEqual(a, b) { a = String(a); b = String(b); let diff = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return diff === 0; }
 
 const CORS = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization', 'Access-Control-Max-Age': '86400'};
@@ -39,6 +43,7 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {status,
 async function readJson(req) { must(Number(req.headers.get('content-length') || 0) <= 100000, 'too_large', 413); try { return await req.json(); } catch { throw new HttpError(400, 'invalid_json'); } }
 
 const q = (db, sql, ...a) => db.prepare(sql).bind(...a);
+const ipOf = req => req.headers.get('cf-connecting-ip') || 'local';
 const one = (db, sql, ...a) => q(db, sql, ...a).first();
 const all = async (db, sql, ...a) => (await q(db, sql, ...a).all()).results;
 
@@ -93,6 +98,10 @@ async function intakeSave(env, req) {
       d.participant_name, d.participant_id, d.ref_name, d.ref_email, d.ref_phone, t, r.id).run();
     return json({...await publicView(db, await one(db, 'SELECT * FROM requests WHERE id=?', r.id)), merged: false});
   }
+  const ip = ipOf(req), hourAgo = new Date(Date.now() - 3600000).toISOString(), dayAgo = new Date(Date.now() - 86400000).toISOString();
+  must((await one(db, "SELECT COUNT(*) AS n FROM events WHERE kind='create' AND ip=? AND at>?", ip, hourAgo)).n < CREATE_PER_IP_HOUR, 'too_many_requests', 429);
+  must((await one(db, "SELECT COUNT(*) AS n FROM events WHERE kind='create' AND at>?", dayAgo)).n < CREATE_PER_DAY, 'too_many_requests', 429);
+  await q(db, "INSERT INTO events(kind,ip,at) VALUES ('create',?,?)", ip, t).run();
   // Always a new request. Never look up or return an existing one by ID/email: that would hand
   // a stranger the other request's token. Noa sees every request with the same ID flagged.
   const flagged = await q(db, 'UPDATE requests SET possible_duplicate=1 WHERE participant_id=?', d.participant_id).run();
@@ -104,7 +113,9 @@ async function intakeSave(env, req) {
 }
 async function intakeUpload(env, req, token) {
   const db = env.DB; const r = await byToken(db, token);
-  must(Number(req.headers.get('content-length') || 0) <= MAX_BYTES + 200000, 'too_large', 413);
+  const len = Number(req.headers.get('content-length'));
+  must(len > 0, 'length_required', 411);
+  must(len <= MAX_BYTES + 200000, 'too_large', 413);
   const n = await one(db, 'SELECT COUNT(*) AS n FROM files WHERE request_id=?', r.id);
   must(n.n < MAX_FILES_PER_REQUEST, 'too_many_files', 409);
   let form; try { form = await req.formData(); } catch { throw new HttpError(400, 'invalid_form'); }
@@ -119,14 +130,17 @@ async function intakeUpload(env, req, token) {
   must(sniff(new Uint8Array(buf.slice(0, 16)), ext), 'bad_type', 415);
   const id = uid(), key = `f/${r.id}/${id}`, mime = EXT_MIME[ext];
   await env.FILES.put(key, buf, {metadata: {mime, name}});
-  await q(db, 'INSERT INTO files(id,request_id,doc_type,original_name,kv_key,size_bytes,mime,uploaded_at) VALUES (?,?,?,?,?,?,?,?)', id, r.id, docType, name, key, buf.byteLength, mime, now()).run();
+  try {
+    await q(db, 'INSERT INTO files(id,request_id,doc_type,original_name,kv_key,size_bytes,mime,uploaded_at) VALUES (?,?,?,?,?,?,?,?)', id, r.id, docType, name, key, buf.byteLength, mime, now()).run();
+  } catch (e) { await env.FILES.delete(key).catch(() => {}); throw e; }   // no orphan document left in KV
   await q(db, 'UPDATE requests SET updated_at=?, fully_downloaded_at=NULL WHERE id=?', now(), r.id).run();
   return json(await publicView(db, await one(db, 'SELECT * FROM requests WHERE id=?', r.id)), 201);
 }
 async function intakeRemove(env, token, fileId) {
   const db = env.DB; const r = await byToken(db, token);
   const f = await one(db, 'SELECT * FROM files WHERE id=? AND request_id=? AND downloaded_at IS NULL', fileId, r.id);
-  if (f) { await q(db, 'DELETE FROM files WHERE id=?', f.id).run(); await env.FILES.delete(f.kv_key); }
+  // KV first: if that fails the row stays, so the removal can simply be retried
+  if (f) { await env.FILES.delete(f.kv_key); await q(db, 'DELETE FROM files WHERE id=?', f.id).run(); }
   await q(db, 'UPDATE requests SET updated_at=? WHERE id=?', now(), r.id).run();
   return json(await publicView(db, r));
 }
@@ -140,13 +154,16 @@ async function intakeSubmit(env, token) {
 
 /* ---------- staff ---------- */
 async function staffLogin(env, req) {
-  const db = env.DB; const ip = req.headers.get('cf-connecting-ip') || 'local';
+  const db = env.DB; const ip = ipOf(req);
   const since = new Date(Date.now() - LOGIN_WINDOW_MIN * 60000).toISOString();
   const tries = await one(db, 'SELECT COUNT(*) AS n FROM login_attempts WHERE ip=? AND at>?', ip, since);
   must(tries.n < LOGIN_LIMIT, 'too_many_attempts', 429);
+  const everyone = await one(db, 'SELECT COUNT(*) AS n FROM login_attempts WHERE at>?', since);
+  must(everyone.n < LOGIN_GLOBAL_LIMIT, 'too_many_attempts', 429);
   const body = await readJson(req);
+  must(String(body.email || '').length <= 200 && String(body.password || '').length <= 200, 'bad_login', 401);
   const okEmail = String(body.email || '').trim().toLowerCase() === String(env.STAFF_EMAIL).toLowerCase();
-  const okPass = !!env.STAFF_PASSWORD && safeEqual(String(body.password || ''), env.STAFF_PASSWORD);
+  const okPass = !!env.STAFF_PASSWORD && await sameSecret(String(body.password || ''), env.STAFF_PASSWORD);
   if (!okEmail || !okPass) { await q(db, 'INSERT INTO login_attempts(ip,at) VALUES (?,?)', ip, now()).run(); throw new HttpError(401, 'bad_login'); }
   await q(db, 'DELETE FROM login_attempts WHERE ip=?', ip).run();
   const token = randomToken();
@@ -169,11 +186,19 @@ async function listRequests(env) {
 }
 async function patchRequest(env, req, id) {
   const body = await readJson(req); const sets = [], vals = [];
+  const r = await one(env.DB, 'SELECT * FROM requests WHERE id=?', id);
+  must(r, 'not_found', 404);
   for (const [k, v] of Object.entries(body)) {
     must(STAFF_FIELDS.includes(k), 'bad_field');
-    if (k === 'status') must(['in_progress', 'submitted', 'approved'].includes(v), 'bad_status');
+    // staff only ever approves a submitted request; an approved one never reopens
+    if (k === 'status') must(v === 'approved' && r.status === 'submitted', 'bad_status', 409);
     else if (k === 'folder_name') must(v === null || (typeof v === 'string' && v.length <= 255), 'bad_value');
-    else must(v === null || (typeof v === 'string' && !isNaN(Date.parse(v))), 'bad_value');
+    else must(v === null || (typeof v === 'string' && ISO.test(v)), 'bad_value');
+    if (k === 'archived_at' && v) must(r.status === 'approved', 'not_approved', 409);
+    if (k === 'fully_downloaded_at' && v) {
+      const left = await one(env.DB, 'SELECT COUNT(*) AS n FROM files WHERE request_id=? AND downloaded_at IS NULL', id);
+      must(left.n === 0, 'not_fully_downloaded', 409);
+    }
     sets.push(`${k}=?`); vals.push(v);
   }
   must(sets.length, 'nothing_to_update');
@@ -182,6 +207,9 @@ async function patchRequest(env, req, id) {
   return json({ok: true});
 }
 async function purgeRequest(env, id) {
+  const r = await one(env.DB, 'SELECT status, fully_downloaded_at FROM requests WHERE id=?', id);
+  must(r, 'not_found', 404);
+  must(r.status === 'approved' && r.fully_downloaded_at, 'not_ready_to_purge', 409);   // never before Noa has every file
   const files = await all(env.DB, 'SELECT kv_key FROM files WHERE request_id=?', id);
   for (const f of files) await env.FILES.delete(f.kv_key);
   await q(env.DB, 'UPDATE requests SET purged_at=COALESCE(purged_at, ?) WHERE id=?', now(), id).run();
@@ -195,7 +223,7 @@ async function deleteRequest(env, id) {
 async function patchFiles(env, req) {
   const body = await readJson(req);
   must(Array.isArray(body.ids) && body.ids.length <= 200 && body.ids.every(x => typeof x === 'string'), 'bad_ids');
-  must(body.downloaded_at === null || !isNaN(Date.parse(body.downloaded_at)), 'bad_value');
+  must(body.downloaded_at === null || (typeof body.downloaded_at === 'string' && ISO.test(body.downloaded_at)), 'bad_value');
   if (body.ids.length) await env.DB.batch(body.ids.map(fid => q(env.DB, 'UPDATE files SET downloaded_at=? WHERE id=?', body.downloaded_at, fid)));
   return json({ok: true});
 }
@@ -210,10 +238,13 @@ async function getFile(env, id) {
 
 /* ---------- daily cleanup ---------- */
 export async function dailyCleanup(env) {
-  const days = Number(env.PURGE_DAYS || 14);
+  const days = Number(env.PURGE_DAYS);
+  if (!Number.isInteger(days) || days < 1 || days > 365) { console.error('PURGE_DAYS invalid, nothing purged:', env.PURGE_DAYS); return 0; }
   const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-  const due = await all(env.DB, "SELECT id FROM requests WHERE status='approved' AND fully_downloaded_at IS NOT NULL AND fully_downloaded_at<? AND purged_at IS NULL", cutoff);
-  for (const r of due) await purgeRequest(env, r.id);
+  const due = await all(env.DB, `SELECT id FROM requests r WHERE status='approved' AND fully_downloaded_at IS NOT NULL AND fully_downloaded_at<? AND purged_at IS NULL
+    AND NOT EXISTS (SELECT 1 FROM files f WHERE f.request_id=r.id AND f.downloaded_at IS NULL)`, cutoff);
+  for (const r of due) { try { await purgeRequest(env, r.id); } catch (e) { console.error('purge failed', r.id, e.message); } }
+  await q(env.DB, 'DELETE FROM events WHERE at<?', new Date(Date.now() - 86400000).toISOString()).run();
   await q(env.DB, 'DELETE FROM sessions WHERE expires_at<?', now()).run();
   await q(env.DB, 'DELETE FROM login_attempts WHERE at<?', new Date(Date.now() - 86400000).toISOString()).run();
   return due.length;

@@ -1,9 +1,9 @@
 // API checks for worker/index.mjs against a local Worker.
-//   1. npx wrangler d1 migrations apply shavim-intake --local
+//   1. npx wrangler d1 migrations apply shavim-intake --local   (fresh run: delete .wrangler/state first)
 //   2. npx wrangler dev --local --port 8787        (STAFF_PASSWORD comes from .dev.vars)
 //   3. node test/api.mjs
 import fs from 'fs';
-const BASE = process.env.API || 'http://localhost:8787';
+const BASE = process.env.API || 'http://127.0.0.1:8787';
 const PASS = (fs.readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8').match(/^STAFF_PASSWORD=(.*)$/m) || [])[1]?.trim();
 const EMAIL = 'noa@amutatshavim.co.il';
 
@@ -84,6 +84,16 @@ r = await api(`/api/intake/${T}`);
 check('approved link returns no personal details', r.status === 200 && JSON.stringify(r.data) === '{"status":"approved"}', JSON.stringify(r.data));
 r = await upload(T, 'medical', PDF, 'late.pdf');
 check('no upload after approval → 409', r.status === 409);
+r = await api(`/api/staff/requests/${mine.id}`, {method: 'PATCH', auth: S, json: {status: 'submitted'}});
+check('approved request cannot be reopened → 409', r.status === 409);
+r = await api(`/api/staff/requests/${mine.id}`, {method: 'PATCH', auth: S, json: {last_download_at: '12/31/2099'}});
+check('non-ISO date rejected → 400', r.status === 400);
+r = await api(`/api/staff/requests/${mine.id}/purge`, {method: 'POST', auth: S});
+check('purge before full download → 409', r.status === 409);
+r = await api(`/api/staff/requests/${other.id}`, {method: 'PATCH', auth: S, json: {archived_at: new Date().toISOString()}});
+check('only approved requests can be archived → 409', r.status === 409);
+r = await api(`/api/staff/requests/${mine.id}`, {method: 'PATCH', auth: S, json: {archived_at: new Date().toISOString(), fully_downloaded_at: new Date().toISOString()}});
+check('archive + full download on approved', r.status === 200);
 r = await api(`/api/staff/requests/${mine.id}/purge`, {method: 'POST', auth: S});
 r = await api(`/api/staff/files/${fid}`, {auth: S});
 check('purged file → 410', r.status === 410);
@@ -95,6 +105,9 @@ check('logout kills the session', r.status === 401);
 for (let i = 0; i < 5; i++) await api('/api/staff/login', {method: 'POST', json: {email: EMAIL, password: 'wrong'}});
 r = await api('/api/staff/login', {method: 'POST', json: {email: EMAIL, password: PASS}});
 check('6th login after 5 failures → 429', r.status === 429);
+let last;
+for (let i = 0; i < 10; i++) last = await api('/api/intake', {method: 'POST', json: {token: null, details: D}});
+check('11th+ new request from one address in an hour → 429', last.status === 429, String(last.status));
 r = await fetch(BASE + '/api/intake', {method: 'OPTIONS'});
 check('CORS preflight', r.status === 204 && r.headers.get('access-control-allow-origin') === '*');
 
