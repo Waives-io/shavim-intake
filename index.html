@@ -14,11 +14,10 @@
 <script>
 /* =====================================================================
    הגדרות — ממלאים פעם אחת (ראו SETUP-GUIDE.md)
-   כל עוד supabaseUrl ריק, האפליקציה רצה במצב הדגמה (הנתונים בדפדפן בלבד).
+   כל עוד apiUrl ריק, האפליקציה רצה במצב הדגמה (הנתונים בדפדפן בלבד).
    ===================================================================== */
 window.SHAVIM_CONFIG = {
-  supabaseUrl: '',          // https://xxxx.supabase.co
-  supabaseAnonKey: '',      // Project Settings → API → anon public
+  apiUrl: '',               // https://shavim-intake.<account>.workers.dev
   emailjs: {                // https://dashboard.emailjs.com
     publicKey: '',
     serviceId: '',
@@ -259,7 +258,7 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
    Constants
    ===================================================================== */
 const CFG = window.SHAVIM_CONFIG;
-const DEMO = !CFG.supabaseUrl;
+const DEMO = !CFG.apiUrl;
 const DOCS = [
   {key:'committee',   label:'טופס החלטת ועדה',              req:true},
   {key:'psychiatric', label:'דוח פסיכיאטרי עדכני',           req:true},
@@ -278,7 +277,6 @@ const OVERDUE_DAYS = 7, PURGE_DAYS = 14, MAX_MB = 15;
 const EXT_MIME = {pdf:'application/pdf',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heic:'image/heic',heif:'image/heif',
   doc:'application/msword',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx,image/*,application/pdf';
-const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
 const BASE_URL = location.protocol === 'file:' ? location.href.split(/[?#]/)[0]
   : (CFG.publicUrl || (location.origin + location.pathname)).replace(/index\.html$/,'');
 const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -414,52 +412,49 @@ function mailToReferrer(r) {
 }
 
 /* =====================================================================
-   Backend: Supabase (live) or demo (this browser only)
+   Backend: Cloudflare Worker (live) or demo (this browser only)
    ===================================================================== */
-function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('script')); document.head.appendChild(s); }); }
-let _sb = null;
-async function sb() {
-  if (_sb) return _sb;
-  if (!window.supabase) await loadScript(SUPABASE_JS);
-  _sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {auth:{persistSession:true, autoRefreshToken:true}});
-  return _sb;
-}
-const unwrap = ({data, error}) => { if (error) throw error; return data; };
 const fileMime = f => f.type || EXT_MIME[extOf(f.name)] || 'application/octet-stream';
-// Stored extension is always an allowed one (the storage policy rejects anything else)
+// The server accepts only allowed extensions; a pasted image without one gets it from its type
 const safeExt = f => EXT_MIME[extOf(f.name)] ? extOf(f.name) : (Object.keys(EXT_MIME).find(k => EXT_MIME[k] === f.type) || 'bin');
-const storagePath = (token, doc, file) => `${token}/${doc}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${safeExt(file)}`;
-
+const uploadName = f => EXT_MIME[extOf(f.name)] ? f.name : `${f.name || 'file'}.${safeExt(f)}`;
+const STAFF_KEY = 'shavim-staff-session';
+const staffToken = {
+  get() { try { return localStorage.getItem(STAFF_KEY); } catch { return null; } },
+  set(t) { try { t ? localStorage.setItem(STAFF_KEY, t) : localStorage.removeItem(STAFF_KEY); } catch {} },
+};
+async function call(path, {method = 'GET', json, body, staff = false, raw = false} = {}) {
+  const headers = {};
+  if (json !== undefined) headers['Content-Type'] = 'application/json';
+  if (staff && staffToken.get()) headers.Authorization = 'Bearer ' + staffToken.get();
+  const res = await fetch(CFG.apiUrl.replace(/\/+$/, '') + path, {method, headers, body: json !== undefined ? JSON.stringify(json) : body});
+  if (!res.ok) {
+    const err = new Error((await res.json().catch(() => ({}))).error || 'http_' + res.status); err.status = res.status;
+    if (staff && res.status === 401) staffToken.set(null);
+    throw err;
+  }
+  return raw ? res.blob() : res.json();
+}
 const LiveAPI = {
-  async get(token) { return unwrap(await (await sb()).rpc('intake_get', {p_token: token})); },
-  async save(token, p) { return unwrap(await (await sb()).rpc('intake_save', {p_token: token, p})); },
-  async upload(token, doc, file) {
-    const c = await sb(); const path = storagePath(token, doc, file);
-    unwrap(await c.storage.from('intake').upload(path, file, {contentType: fileMime(file), upsert:false}));
-    return unwrap(await c.rpc('intake_add_file', {p_token: token, p_doc_type: doc, p_path: path, p_name: file.name, p_size: file.size, p_mime: fileMime(file)}));
+  get: token => call(`/api/intake/${token}`),
+  save: (token, details) => call('/api/intake', {method:'POST', json:{token, details}}),
+  upload(token, doc, file) {
+    const fd = new FormData(); fd.append('doc_type', doc); fd.append('file', file, uploadName(file));
+    return call(`/api/intake/${token}/files`, {method:'POST', body: fd});
   },
-  async remove(token, fileId) { return unwrap(await (await sb()).rpc('intake_remove_file', {p_token: token, p_file_id: fileId})); },
-  async submit(token) { return unwrap(await (await sb()).rpc('intake_submit', {p_token: token})); },
+  remove: (token, fileId) => call(`/api/intake/${token}/files/${fileId}`, {method:'DELETE'}),
+  submit: token => call(`/api/intake/${token}/submit`, {method:'POST'}),
   // staff
-  async session() { const {data} = await (await sb()).auth.getSession(); return data.session ? {email: data.session.user.email} : null; },
-  async login(email, password) { const {error} = await (await sb()).auth.signInWithPassword({email, password}); if (error) throw error; },
-  async logout() { await (await sb()).auth.signOut(); },
-  async list() { return unwrap(await (await sb()).from('requests').select('*, files(*)').order('created_at', {ascending:false})); },
-  async update(id, patch) { unwrap(await (await sb()).from('requests').update(patch).eq('id', id)); },
-  async markFiles(ids, patch) { if (ids.length) unwrap(await (await sb()).from('files').update(patch).in('id', ids)); },
-  async blob(f) { return unwrap(await (await sb()).storage.from('intake').download(f.storage_path)); },
-  async viewUrl(f) { return unwrap(await (await sb()).storage.from('intake').createSignedUrl(f.storage_path, 300)).signedUrl; },
-  async purge(r) {
-    // delete page by page until the folder is really empty
-    const c = await sb();
-    for (let round = 0; round < 50; round++) {
-      const listed = unwrap(await c.storage.from('intake').list(r.token, {limit:100}));
-      if (!listed.length) return;
-      unwrap(await c.storage.from('intake').remove(listed.map(o => `${r.token}/${o.name}`)));
-    }
-    throw new Error('purge_incomplete');
-  },
-  async destroy(r) { await this.purge(r); unwrap(await (await sb()).from('requests').delete().eq('id', r.id)); },
+  async session() { if (!staffToken.get()) return null; try { return await call('/api/staff/session', {staff:true}); } catch { return null; } },
+  async login(email, password) { const r = await call('/api/staff/login', {method:'POST', json:{email, password}}); staffToken.set(r.token); },
+  async logout() { try { await call('/api/staff/logout', {method:'POST', staff:true}); } catch {} staffToken.set(null); },
+  list: () => call('/api/staff/requests', {staff:true}),
+  update: (id, patch) => call(`/api/staff/requests/${id}`, {method:'PATCH', json:patch, staff:true}),
+  async markFiles(ids, patch) { if (ids.length) await call('/api/staff/files', {method:'PATCH', json:{ids, ...patch}, staff:true}); },
+  blob: f => call(`/api/staff/files/${f.id}`, {staff:true, raw:true}),
+  async viewUrl(f) { return URL.createObjectURL(await this.blob(f)); },
+  purge: r => call(`/api/staff/requests/${r.id}/purge`, {method:'POST', staff:true}),
+  destroy: r => call(`/api/staff/requests/${r.id}`, {method:'DELETE', staff:true}),
 };
 
 /* ---- demo backend: localStorage + IndexedDB ---- */
@@ -847,7 +842,7 @@ function renderLogin() {
   $('#lf').onsubmit = async e => {
     e.preventDefault(); const b = $('#lb'); busy(b, true); $('#lerr').textContent = '';
     try { await API.login(normEmail($('#le').value), $('#lp').value); startNoa(); }
-    catch { busy(b, false); $('#lerr').textContent = 'המייל או הסיסמה לא נכונים'; }
+    catch (err) { busy(b, false); $('#lerr').textContent = err.status === 429 ? 'יותר מדי ניסיונות. אפשר לנסות שוב בעוד 15 דקות.' : 'המייל או הסיסמה לא נכונים'; }
   };
 }
 
@@ -876,6 +871,7 @@ async function loadDash(silent) {
   if (D.openId) { const r = D.list.find(x => x.id === D.openId); if (r) openDrawer(r.id); else D.openId = null; }
 }
 async function autoPurge() {
+  if (!DEMO) return;  // live: the Worker purges daily
   const due = D.list.filter(r => r.status === 'approved' && r.fully_downloaded_at && !r.purged_at && daysSince(r.fully_downloaded_at) >= PURGE_DAYS);
   for (const r of due) {
     try { await API.purge(r); const now = new Date().toISOString(); await API.update(r.id, {purged_at: now}); r.purged_at = now; }
