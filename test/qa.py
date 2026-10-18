@@ -1,6 +1,6 @@
 # Run from the project folder:  python -m http.server 8765   (in one window)
 #                               python test/qa.py          (in another)
-import asyncio, os, sys, json
+import asyncio, os, re, sys, json
 from playwright.async_api import async_playwright
 
 BASE = 'http://localhost:8765/'
@@ -11,6 +11,13 @@ os.makedirs(FIX, exist_ok=True)
 for n in ['vaada.pdf', 'psych.pdf', 'social.pdf', 'tz.jpg']:
     open(f'{FIX}/{n}', 'wb').write(b'%PDF-1.4 test ' + n.encode())
 open(f'{FIX}/bad.exe', 'wb').write(b'MZ')
+
+# The QA runs in demo mode: blank apiUrl in the served page so no test data reaches the live Worker
+async def demo_mode(ctx):
+    async def blank(route):
+        r = await route.fetch(); body = await r.text()
+        await route.fulfill(response=r, body=re.sub(r"apiUrl: '[^']*',", "apiUrl: '',", body, count=1))
+    await ctx.route(re.compile(r'.*localhost:8765/(index\.html)?(\?.*)?$'), blank)
 
 results = []
 def check(name, cond, extra=''):
@@ -34,7 +41,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch()
         ctx = await b.new_context(viewport={'width': 1280, 'height': 900}, locale='he-IL')
-        await ctx.add_init_script(PICKER)
+        await ctx.add_init_script(PICKER); await demo_mode(ctx)
         page = await ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
@@ -136,7 +143,7 @@ async def main():
         check('same ID+email opens a new request, not the existing one', not same and '?r=' in page.url and n == 1, f'{page.url} has={n}')
 
         # ---------- phone width form ----------
-        m = await b.new_context(viewport={'width': 390, 'height': 844}, locale='he-IL', is_mobile=True, has_touch=True)
+        m = await b.new_context(viewport={'width': 390, 'height': 844}, locale='he-IL', is_mobile=True, has_touch=True); await demo_mode(m)
         mp = await m.new_page()
         await mp.goto(BASE); await mp.wait_for_selector('#participant_name')
         ow = await mp.evaluate('document.documentElement.scrollWidth')

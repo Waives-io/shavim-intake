@@ -6,11 +6,11 @@
   "d1_databases": [{
     "binding": "DB",
     "database_name": "shavim-intake",
-    "database_id": "REPLACE_WITH_D1_ID",
+    "database_id": "b83a8ddc-49ac-4f8a-bb49-d882ba6a7b6f",
     "migrations_dir": "migrations"
   }],
   // Uploaded documents. Deleted automatically 14 days after Noa downloads an approved request.
-  "kv_namespaces": [{ "binding": "FILES", "id": "REPLACE_WITH_KV_ID" }],
+  "kv_namespaces": [{ "binding": "FILES", "id": "19b3cd9bf80c4d66a4ba018690677f85" }],
   // Daily: delete files from the cloud after download, clean old sessions.
   "triggers": { "crons": ["15 2 * * *"] },
   "vars": {
