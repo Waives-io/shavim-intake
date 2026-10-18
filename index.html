@@ -50,7 +50,7 @@ body{direction:rtl;text-align:right;min-height:100vh}
 button,input,textarea,select{font:inherit;color:inherit}
 a{color:var(--ink)}
 .ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
-:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:6px}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px;border-radius:6px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
 /* ---------- header ---------- */
@@ -73,7 +73,7 @@ h1{font-size:28px;font-weight:800;margin:6px 0 4px;line-height:1.25}
 h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .lead{color:var(--muted);margin:0 0 22px}
 .card{border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:16px;background:var(--bg)}
-.card h2 .num{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;margin-inline-end:8px;font-size:15px;font-weight:800}
+.card h2 .num{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;margin-inline-end:8px;font-size:18.7px;font-weight:800}
 .card:nth-of-type(1) h2 .num{background:var(--yellow)}
 .card:nth-of-type(2) h2 .num{background:var(--blue)}
 .card:nth-of-type(3) h2 .num{background:var(--green);color:#fff}
@@ -205,7 +205,7 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .dr-body h1{font-size:24px}
 .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:15px;margin:10px 0 18px}
 .kv dt{color:var(--muted)}
-.kv dd{margin:0;font-weight:500}
+.kv dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .sec-title{font-size:15px;font-weight:700;margin:20px 0 8px;color:var(--muted)}
 .dlist{border:1px solid var(--line);border-radius:10px}
 .ditem{padding:12px 14px;border-top:1px solid var(--line)}
@@ -308,7 +308,7 @@ async function copyText(txt) {
   try { await navigator.clipboard.writeText(txt); }
   catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
 }
-function busy(btn, on) { if (!btn) return; btn.classList.toggle('busy', on); btn.disabled = on; }
+function busy(btn, on) { if (!btn) return; btn.classList.toggle('busy', on); btn.disabled = on; btn.setAttribute('aria-busy', on ? 'true' : 'false'); }
 
 /* ---------- validation ---------- */
 function normPhone(v) {
@@ -368,7 +368,7 @@ async function sendEmail({to, subject, html, replyTo}) {
   const ej = CFG.emailjs || {};
   if (DEMO || !ej.publicKey || !ej.serviceId || !ej.templateId) {
     console.info('[email skipped – not configured]', {to, subject});
-    if (DEMO) toast(`(הדגמה) מייל אל ${to} לא נשלח באמת`);
+    if (DEMO) { toast(`(הדגמה) מייל אל ${to} לא נשלח באמת`); return true; }
     return false;
   }
   try {
@@ -391,7 +391,7 @@ function mailToNoa(r, kind) {
   const miss = missingReq(r);
   const head = kind === 'submit' ? (r.status === 'submitted' && r._resend ? 'נוספו מסמכים' : 'נשלחו כל מסמכי החובה') : 'נשמר חלקית';
   const subject = `קליטת מתמודד: ${r.participant_name} – ${head}`;
-  const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6">
+  const html = `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;line-height:1.6">
     <p><b>${esc(r.participant_name)}</b> · ת"ז ${esc(r.participant_id)}</p>
     <p>גורם מפנה: ${esc(r.ref_name)} · ${esc(r.ref_phone)} · ${esc(r.ref_email)}</p>
     ${docsTableHtml(r)}
@@ -402,7 +402,7 @@ function mailToNoa(r, kind) {
 function mailToReferrer(r) {
   const miss = missingReq(r);
   const subject = `לינק להשלמת מסמכי הקליטה של ${r.participant_name} – עמותת שווים`;
-  const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6">
+  const html = `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;line-height:1.6">
     <p>שלום ${esc(r.ref_name)},</p>
     <p>שמרנו את הבקשה לקליטת <b>${esc(r.participant_name)}</b>. אפשר להשלים או להוסיף מסמכים בכל זמן דרך הלינק האישי:</p>
     <p><a href="${contLink(r)}">${contLink(r)}</a></p>
@@ -426,13 +426,15 @@ async function sb() {
 }
 const unwrap = ({data, error}) => { if (error) throw error; return data; };
 const fileMime = f => f.type || EXT_MIME[extOf(f.name)] || 'application/octet-stream';
-const storagePath = (token, doc, name) => `${token}/${doc}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${extOf(name) || 'bin'}`;
+// Stored extension is always an allowed one (the storage policy rejects anything else)
+const safeExt = f => EXT_MIME[extOf(f.name)] ? extOf(f.name) : (Object.keys(EXT_MIME).find(k => EXT_MIME[k] === f.type) || 'bin');
+const storagePath = (token, doc, file) => `${token}/${doc}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${safeExt(file)}`;
 
 const LiveAPI = {
   async get(token) { return unwrap(await (await sb()).rpc('intake_get', {p_token: token})); },
   async save(token, p) { return unwrap(await (await sb()).rpc('intake_save', {p_token: token, p})); },
   async upload(token, doc, file) {
-    const c = await sb(); const path = storagePath(token, doc, file.name);
+    const c = await sb(); const path = storagePath(token, doc, file);
     unwrap(await c.storage.from('intake').upload(path, file, {contentType: fileMime(file), upsert:false}));
     return unwrap(await c.rpc('intake_add_file', {p_token: token, p_doc_type: doc, p_path: path, p_name: file.name, p_size: file.size, p_mime: fileMime(file)}));
   },
@@ -448,9 +450,14 @@ const LiveAPI = {
   async blob(f) { return unwrap(await (await sb()).storage.from('intake').download(f.storage_path)); },
   async viewUrl(f) { return unwrap(await (await sb()).storage.from('intake').createSignedUrl(f.storage_path, 300)).signedUrl; },
   async purge(r) {
-    const c = await sb(); const listed = unwrap(await c.storage.from('intake').list(r.token, {limit:1000}));
-    const paths = listed.map(o => `${r.token}/${o.name}`);
-    if (paths.length) unwrap(await c.storage.from('intake').remove(paths));
+    // delete page by page until the folder is really empty
+    const c = await sb();
+    for (let round = 0; round < 50; round++) {
+      const listed = unwrap(await c.storage.from('intake').list(r.token, {limit:100}));
+      if (!listed.length) return;
+      unwrap(await c.storage.from('intake').remove(listed.map(o => `${r.token}/${o.name}`)));
+    }
+    throw new Error('purge_incomplete');
   },
   async destroy(r) { await this.purge(r); unwrap(await (await sb()).from('requests').delete().eq('id', r.id)); },
 };
@@ -467,16 +474,17 @@ const Demo = {
   open(db, token) { const r = this.find(db, token); if (r.status === 'approved') throw new Error('not_found_or_closed'); return r; },
 };
 const DemoAPI = {
-  async get(token) { return Demo.pub(Demo.find(Demo.db(), token)); },
+  async get(token) { const r = Demo.find(Demo.db(), token); return r.status === 'approved' ? {status:'approved'} : Demo.pub(r); },
   async save(token, p) {
-    const db = Demo.db(); let r, merged = false; const now = new Date().toISOString();
+    // same rules as intake_save: a new form never reopens an existing request; same ID → both flagged
+    const db = Demo.db(); let r; const now = new Date().toISOString();
     if (!token) {
-      r = db.requests.find(x => x.participant_id === p.participant_id && x.ref_email === p.ref_email && x.status !== 'approved');
-      if (r) merged = true;
-      else { r = {id:uid(), token:uid(), status:'in_progress', created_at:now, files:[], possible_duplicate: db.requests.some(x => x.participant_id === p.participant_id)}; db.requests.unshift(r); }
+      const same = db.requests.filter(x => x.participant_id === p.participant_id);
+      same.forEach(x => x.possible_duplicate = true);
+      r = {id:uid(), token:uid(), status:'in_progress', created_at:now, files:[], possible_duplicate: same.length > 0}; db.requests.unshift(r);
     } else r = Demo.open(db, token);
     Object.assign(r, p, {updated_at: now}); Demo.store(db);
-    return {...Demo.pub(r), merged};
+    return {...Demo.pub(r), merged:false};
   },
   async upload(token, doc, file) {
     const db = Demo.db(); const r = Demo.open(db, token); const id = uid();
@@ -545,13 +553,25 @@ function renderTop(who) {
 /* =====================================================================
    Modal
    ===================================================================== */
-function modal(html, onMount) {
+// Keep Tab / Shift+Tab inside an open dialog
+function trapTab(e, box) {
+  if (e.key !== 'Tab') return;
+  const items = $$('button:not(:disabled), a[href], input:not([tabindex="-1"]), textarea, [tabindex="0"]', box).filter(x => x.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+// onClose runs once, however the dialog closes (button, Esc, click outside)
+function modal(html, onMount, onClose) {
   const layer = $('#layer'); const prev = document.activeElement;
   const el = document.createElement('div'); el.className = 'modal'; el.setAttribute('role','dialog'); el.setAttribute('aria-modal','true');
   el.innerHTML = `<div class="mbox">${html}</div>`;
+  const h = el.querySelector('h2'); if (h) { h.id = 'mh-' + uid(); el.setAttribute('aria-labelledby', h.id); }
   layer.appendChild(el);
-  const close = () => { el.remove(); document.removeEventListener('keydown', onKey); prev && prev.focus && prev.focus(); };
-  const onKey = e => { if (e.key === 'Escape') close(); };
+  let closed = false;
+  const close = () => { if (closed) return; closed = true; el.remove(); document.removeEventListener('keydown', onKey); prev && prev.focus && prev.focus(); onClose && onClose(); };
+  const onKey = e => { if (e.key === 'Escape') close(); else trapTab(e, el); };
   document.addEventListener('keydown', onKey);
   el.addEventListener('click', e => { if (e.target === el || e.target.closest('[data-close]')) close(); });
   onMount && onMount(el, close);
@@ -560,13 +580,11 @@ function modal(html, onMount) {
 }
 function ask(title, text, buttons) {
   return new Promise(res => {
+    let value = null;
     modal(`<h2>${esc(title)}</h2>${text ? `<p>${text}</p>` : ''}<div class="mbtns">${buttons.map((b,i) =>
       `<button class="btn ${b.primary ? 'primary' : b.ghost ? 'ghost' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div>`,
-      (el, close) => {
-        el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { close(); res(buttons[+b.dataset.i].value); });
-        el.addEventListener('click', e => { if (e.target === el) res(null); });
-        document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { document.removeEventListener('keydown', k); res(null); } });
-      });
+      (el, close) => el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { value = buttons[+b.dataset.i].value; close(); }),
+      () => res(value));
   });
 }
 
@@ -624,6 +642,7 @@ async function startForm(token) {
     try { F.req = await API.get(token); F.token = token; }
     catch (e) { return renderNotFound(); }
     if (F.req.status === 'approved') return renderClosed();
+    F.refMailedTo = F.req.ref_email; F.refMail = Promise.resolve(true);  // they already hold the link
   }
   renderForm();
 }
@@ -632,8 +651,9 @@ function renderNotFound() {
     <p>ייתכן שהלינק הועתק חלקית. אפשר לפתוח טופס חדש.</p><p><a class="btn" href="${BASE_URL}">לטופס חדש</a></p></div></div>`;
 }
 function renderClosed() {
+  // closed links get no personal details back from the server
   $('#app').innerHTML = `<div class="wrap"><div class="end"><div class="big">${ICON_CHECK}</div>
-    <h1>כל המסמכים של ${esc(F.req.participant_name)} התקבלו</h1>
+    <h1>כל המסמכים התקבלו</h1>
     <p>${esc(CFG.noaName)} מעמותת שווים אישרה את קבלת המסמכים. תודה רבה!</p></div></div>`;
 }
 function renderForm() {
@@ -704,7 +724,7 @@ function renderBar() {
   const resend = r && r.status === 'submitted';
   $('#bar').innerHTML = `
     <button type="button" class="btn primary" id="send" ${miss.length ? 'disabled aria-disabled="true"' : ''}>${resend ? 'שליחת העדכון' : 'שליחת המסמכים'}</button>
-    ${resend ? '' : `<button type="button" class="btn" id="later" ${r ? '' : 'disabled'}>שמירה והשלמה אחר כך</button>`}
+    ${resend ? '' : `<button type="button" class="btn" id="later">שמירה והשלמה אחר כך</button>`}
     <span class="missing">${miss.length ? 'חסרים מסמכי חובה: ' + miss.map(k => DOC[k].label).join(' · ') : 'כל מסמכי החובה הועלו ✓'}</span>`;
   $('#send').onclick = onSend;
   const l = $('#later'); if (l) l.onclick = onLater;
@@ -719,12 +739,20 @@ async function ensureSaved() {
   const d = readDetails();
   if (F.token && sameDetails(d, F.saved)) return true;
   const res = await API.save(F.token, d);
-  const isNew = !F.token;
   F.req = res; F.token = res.token; F.saved = d;
   history.replaceState(null, '', `${BASE_URL}?r=${res.token}`);
-  if (isNew && res.merged) toast('מצאנו בקשה קיימת עבור ת"ז זו — ממשיכים ממנה');
-  if (F.refMailedTo !== d.ref_email) { F.refMailedTo = d.ref_email; mailToReferrer(res); }
+  // link email goes out in the background; a failure is retried and reported on the end screen
+  if (F.refMailedTo !== d.ref_email) {
+    F.refMailedTo = d.ref_email;
+    F.refMail = mailToReferrer(res).then(ok => { if (!ok) F.refMailedTo = null; return ok; });
+  }
   return true;
+}
+async function referrerMailOk() {
+  if (F.refMail && await F.refMail) return true;
+  const ok = await mailToReferrer(F.req);
+  if (ok) { F.refMailedTo = F.req.ref_email; F.refMail = Promise.resolve(true); }
+  return ok;
 }
 async function handleFiles(key, files) {
   const box = $(`.doc[data-doc="${key}"]`), err = box.querySelector('.doc-err');
@@ -756,16 +784,17 @@ async function onSend(e) {
     if (!(await ensureSaved())) { busy(btn, false); return; }
     const wasSubmitted = F.req.status === 'submitted';
     F.req = await API.submit(F.token);
-    await mailToNoa({...F.req, _resend: wasSubmitted}, 'submit');
-    renderThanks();
+    // Noa sees the request in the dashboard even if her email fails
+    const [mailOk] = await Promise.all([referrerMailOk(), mailToNoa({...F.req, _resend: wasSubmitted}, 'submit')]);
+    renderThanks(mailOk);
   } catch (err) { console.error(err); busy(btn, false); toast('השליחה לא הצליחה. כל מה שהעליתם נשמר — נסו שוב.'); }
 }
 async function onLater(e) {
   const btn = e.currentTarget; busy(btn, true);
   try {
     if (!(await ensureSaved())) { busy(btn, false); return; }
-    await mailToNoa(F.req, 'partial');
-    renderSaved();
+    const [mailOk] = await Promise.all([referrerMailOk(), mailToNoa(F.req, 'partial')]);
+    renderSaved(mailOk);
   } catch (err) { console.error(err); busy(btn, false); toast('השמירה לא הצליחה. נסו שוב.'); }
 }
 function endScreen(title, text, showLink) {
@@ -778,14 +807,17 @@ function endScreen(title, text, showLink) {
   window.scrollTo(0, 0);
   const cp = $('#cp'); if (cp) cp.onclick = async () => { await copyText(link); toast('הלינק הועתק'); };
 }
-function renderThanks() {
+const MAIL_FAILED = 'לא הצלחנו לשלוח את הלינק האישי במייל. כדאי להעתיק ולשמור אותו:';
+function renderThanks(mailOk = true) {
   endScreen(`תודה! המסמכים של ${esc(F.req.participant_name)} נשלחו`,
-    `${esc(CFG.noaName)} מעמותת שווים תעבור עליהם ותעדכן אותך במייל. צריך להוסיף מסמך? אפשר דרך הלינק שנשלח אליך במייל.`, false);
+    `${esc(CFG.noaName)} מעמותת שווים תעבור עליהם ותעדכן אותך במייל. ` +
+    (mailOk ? 'צריך להוסיף מסמך? אפשר דרך הלינק שנשלח אליך במייל.' : `צריך להוסיף מסמך? ${MAIL_FAILED}`), !mailOk);
 }
-function renderSaved() {
+function renderSaved(mailOk = true) {
   const miss = missingReq(F.req);
   endScreen('נשמר. אפשר להשלים אחר כך',
-    `שלחנו לינק אישי להשלמה אל <bdi class="ltr">${esc(F.req.ref_email)}</bdi>.${miss.length ? ` עוד חסרים: ${miss.map(k => esc(DOC[k].label)).join(' · ')}.` : ''}`, true);
+    (miss.length ? `עוד חסרים: ${miss.map(k => esc(DOC[k].label)).join(' · ')}. ` : '') +
+    (mailOk ? `שלחנו לינק אישי להשלמה אל <bdi class="ltr">${esc(F.req.ref_email)}</bdi>.` : MAIL_FAILED), true);
 }
 
 /* =====================================================================
@@ -809,7 +841,8 @@ function renderLogin() {
         <button type="button" class="eye" id="eye" aria-label="הצגת הסיסמה">${ICON_EYE}</button></div>
         <div class="err" id="lerr" aria-live="polite"></div></div>
       <button class="btn primary" id="lb" style="width:100%;margin-top:18px">כניסה</button></form></div>`;
-  $('#eye').onclick = () => { const p = $('#lp'); p.type = p.type === 'password' ? 'text' : 'password'; };
+  $('#eye').onclick = e => { const p = $('#lp'), show = p.type === 'password'; p.type = show ? 'text' : 'password';
+    e.currentTarget.setAttribute('aria-label', show ? 'הסתרת הסיסמה' : 'הצגת הסיסמה'); };
   $('#lp').focus();
   $('#lf').onsubmit = async e => {
     e.preventDefault(); const b = $('#lb'); busy(b, true); $('#lerr').textContent = '';
@@ -874,7 +907,7 @@ function renderDash() {
     const fl = $('#folderline'); if (!fl) return; fl.innerHTML = html;
     const ch = $('#chdir'); if (ch) ch.onclick = () => pickRoot().then(() => renderDash());
   });
-  $$('.chip').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); });
+  $$('.chip').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
   $('#q').oninput = e => { D.q = e.target.value; renderRows(); };
   $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
   $('#walink').onclick = () => window.open(`https://wa.me/?text=${encodeURIComponent(linkMsg(true))}`, '_blank', 'noopener');
@@ -904,9 +937,12 @@ function renderRows() {
   if (!rows.length) { $('#list').innerHTML = head + `<div class="empty">אין בקשות שמתאימות לסינון.</div>`; return; }
   $('#list').innerHTML = head + rows.map(r => {
     const late = isLate(r);
-    return `<button class="lrow ${D.flashId === r.id ? 'flash' : ''}" data-id="${r.id}">
+    const got = REQUIRED.filter(k => filesOf(r, k).length).length;
+    const label = `${r.participant_name}, ת"ז ${r.participant_id}${r.possible_duplicate ? ', ת"ז קיימת בבקשה אחרת' : ''}. גורם מפנה: ${r.ref_name}. ` +
+      `מסמכי חובה: ${got} מתוך ${REQUIRED.length}. נפתח: ${fmtDate(r.created_at)}. סטטוס: ${STATUS[r.status].label}${late ? `, ממתין ${daysSince(r.created_at)} ימים` : ''}.`;
+    return `<button class="lrow ${D.flashId === r.id ? 'flash' : ''}" data-id="${r.id}" aria-label="${esc(label)}">
       <span class="c-n"><span class="pname">${esc(r.participant_name)}</span><br><span class="sub ltr">${esc(r.participant_id)}</span>${r.possible_duplicate ? ' <span class="sub">· ת״ז קיימת בבקשה אחרת</span>' : ''}</span>
-      <span class="c-r">${esc(r.ref_name)}<br><span class="sub">${esc(r.ref_phone)}</span></span>
+      <span class="c-r">${esc(r.ref_name)}<br><bdi class="sub ltr">${esc(r.ref_phone)}</bdi></span>
       <span class="c-p">${pillsHtml(r)}</span>
       <span class="c-d">${fmtDate(r.created_at)}<br><span class="sub">${daysAgoTxt(daysSince(r.created_at))}</span></span>
       <span class="c-s"><span class="badge ${STATUS[r.status].cls}">${STATUS[r.status].label}</span>${late ? `<br><span class="late">ממתין ${daysSince(r.created_at)} ימים</span>` : ''}</span>
@@ -922,7 +958,7 @@ function closeDrawer() {
   const id = D.openId; D.openId = null; history.replaceState(null, '', BASE_URL + '?noa');
   const row = id && $(`.lrow[data-id="${id}"]`); row && row.focus();
 }
-function drawerKey(e) { if (e.key === 'Escape' && !$('.modal')) closeDrawer(); }
+function drawerKey(e) { if ($('.modal')) return; if (e.key === 'Escape') closeDrawer(); else trapTab(e, $('.drawer')); }
 function openDrawer(id) {
   const r = D.list.find(x => x.id === id); if (!r) return;
   D.openId = id; history.replaceState(null, '', `${BASE_URL}?noa&open=${id}`);
@@ -994,34 +1030,40 @@ function reminderText(r, wa) {
 function thanksText(r) {
   return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\n\n${CFG.noaName} · עמותת שווים`;
 }
+// Opens the draft in WhatsApp / mail; the date is recorded only after Noa confirms she sent it
 function composeAndSend(r, {title, subject, textFor, stamp}) {
   return new Promise(resolve => {
+    let via = null;
     modal(`<h2>${esc(title)}</h2><p>אפשר לערוך את ההודעה לפני השליחה. היא תיפתח אצלך, ואת לוחצת "שלח".</p>
       <label class="sr" for="msg">ההודעה</label><textarea class="textarea" id="msg" style="width:100%"></textarea>
       <div class="mbtns"><button class="btn primary" id="viaWa">שליחה ב-WhatsApp</button><button class="btn" id="viaMail">שליחה במייל</button>
       <button class="btn ghost" data-close>ביטול</button></div>`, (el, close) => {
         const ta = el.querySelector('#msg'); ta.value = textFor(r, true);
-        const go = async via => {
-          const txt = ta.value;
-          if (via === 'wa') window.open(`https://wa.me/${waPhone(r.ref_phone)}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener');
+        const go = v => {
+          const txt = ta.value; via = v;
+          if (v === 'wa') window.open(`https://wa.me/${waPhone(r.ref_phone)}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener');
           else location.href = `mailto:${encodeURIComponent(r.ref_email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(txt.replace(/\*/g, ''))}`;
           close();
-          await API.update(r.id, {[stamp]: new Date().toISOString()});
-          resolve(true);
         };
         el.querySelector('#viaWa').onclick = () => go('wa');
         el.querySelector('#viaMail').onclick = () => go('mail');
-        el.addEventListener('click', e => { if (e.target === el || e.target.closest('[data-close]')) resolve(false); });
+      }, async () => {
+        if (!via) return resolve(false);
+        const sent = await ask('ההודעה נשלחה?', `לחצת "שלח" ב${via === 'wa' ? '-WhatsApp' : 'מייל'}? נרשום את התאריך בבקשה.`,
+          [{label:'כן, נשלחה', value:true, primary:true}, {label:'עוד לא', value:false, ghost:true}]);
+        if (!sent) return resolve(false);
+        try { await API.update(r.id, {[stamp]: new Date().toISOString()}); resolve(true); }
+        catch { toast('התאריך לא נשמר. נסי שוב.'); resolve(false); }
       });
   });
 }
 async function doRemind(r) {
   const sent = await composeAndSend(r, {title:`תזכורת ל${r.ref_name}`, subject:`תזכורת: מסמכי הקליטה של ${r.participant_name} – עמותת שווים`, textFor:reminderText, stamp:'last_reminder_at'});
-  if (sent) { await refresh(r); toast(`התזכורת נפתחה לשליחה ל${r.ref_name}`); }
+  if (sent) { await refresh(r); toast(`התזכורת ל${r.ref_name} נרשמה`); }
 }
 async function doThanks(r) {
   const sent = await composeAndSend(r, {title:`הודעת תודה ל${r.ref_name}`, subject:`מסמכי הקליטה של ${r.participant_name} התקבלו – עמותת שווים`, textFor:thanksText, stamp:'thanks_sent_at'});
-  if (sent) { await refresh(r); toast(`הודעת התודה נפתחה לשליחה ל${r.ref_name}`); }
+  if (sent) { await refresh(r); toast(`הודעת התודה ל${r.ref_name} נרשמה`); }
 }
 async function doApprove(r, btn) {
   busy(btn, true);
@@ -1075,11 +1117,12 @@ async function findFolder(root, r) {
   const base = safeName(r.participant_name); const found = [];
   for await (const [name, h] of root.entries()) if (h.kind === 'directory' && (name === base || name.startsWith(base + ' - '))) found.push(h);
   if (found.length) {
+    let pick = 'cancel';
     const choice = await new Promise(res => modal(`<h2>נמצאה תיקייה בשם הזה</h2><p>להוסיף את המסמכים לתיקייה קיימת, או לפתוח תיקייה חדשה?</p>
       <div class="pick">${found.map((h, i) => `<button class="btn" data-k="${i}">הוספה אל: ${esc(h.name)}</button>`).join('')}
       <button class="btn" data-k="new">תיקייה חדשה: ${esc(base)} - ${dotDate()}</button><button class="btn ghost" data-k="cancel">ביטול</button></div>`,
-      (el, close) => { el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { close(); res(b.dataset.k); });
-        el.addEventListener('click', e => { if (e.target === el) res('cancel'); }); }));
+      (el, close) => el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { pick = b.dataset.k; close(); }),
+      () => res(pick)));
     if (choice === 'cancel' || choice == null) return null;
     if (choice !== 'new') return found[+choice];
   }
@@ -1101,19 +1144,24 @@ async function doDownload(r, btn) {
     for (let i = 0; i < pending.length; i++) {
       const f = pending[i]; btn.textContent = `שומר ${i+1} מתוך ${pending.length}…`;
       const blob = await API.blob(f);
-      const fh = await uniqueFile(dir, safeName(`${DOC[f.doc_type].label} - ${r.participant_name}`), extOf(f.original_name) || 'pdf');
+      // extension from the stored file (checked by the server), never trusted from the uploaded name
+      const ext = [extOf(f.storage_path), extOf(f.original_name)].find(x => EXT_MIME[x]) || 'pdf';
+      const fh = await uniqueFile(dir, safeName(`${DOC[f.doc_type].label} - ${r.participant_name}`), ext);
       const w = await fh.createWritable(); await w.write(blob); await w.close();
       done.push(f.id);
     }
   } catch (e) { console.error(e); toast(`נשמרו ${done.length} מתוך ${pending.length}. הקבצים האחרים לא נשמרו — נסי שוב.`, 5000); }
   if (done.length) {
-    const now = new Date().toISOString();
-    await API.markFiles(done, {downloaded_at: now});
-    const all = done.length === pending.length;
-    await API.update(r.id, {folder_name: dir.name, last_download_at: now, fully_downloaded_at: all ? now : null});
-    if (all) toast(`${done.length} קבצים נשמרו בתיקייה "${dir.name}"`, 4500);
+    const now = new Date().toISOString(), all = done.length === pending.length;
+    const mark = async () => {
+      await API.markFiles(done, {downloaded_at: now});
+      await API.update(r.id, {folder_name: dir.name, last_download_at: now, fully_downloaded_at: all ? now : null});
+    };
+    // retry once, so saved files are not downloaded again as duplicates
+    try { await mark().catch(mark); if (all) toast(`${done.length} קבצים נשמרו בתיקייה "${dir.name}"`, 4500); }
+    catch (e) { console.error(e); toast(`הקבצים נשמרו בתיקייה "${dir.name}", אבל לא הצלחנו לסמן אותם במערכת. רענני את הדף לפני הורדה נוספת.`, 7000); }
   }
-  await refresh(r);
+  try { await refresh(r); } catch (e) { console.error(e); busy(btn, false); }
 }
 
 /* =====================================================================

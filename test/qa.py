@@ -124,7 +124,7 @@ async def main():
         await page.wait_for_selector('.end')
         check('thank-you screen', 'נשלחו' in await page.text_content('.end h1'))
 
-        # merge: new form, same ID + email → continues existing
+        # same ID + email on a new form → a NEW request (never hands over the existing one)
         await page.goto(BASE)
         await page.wait_for_selector('#participant_name')
         for k, val in [('participant_name', 'שגיא רון'), ('participant_id', '034567891'), ('ref_name', 'אלה מור'), ('ref_email', 'ella@gmail.com'), ('ref_phone', '0527654321')]:
@@ -133,7 +133,7 @@ async def main():
         await page.wait_for_selector('.doc[data-doc=medical].has')
         same = page.url == token_url
         n = await page.eval_on_selector_all('.doc.has', 'e => e.length')
-        check('same ID+email merges into existing request', same and n == 4, f'{page.url} has={n}')
+        check('same ID+email opens a new request, not the existing one', not same and '?r=' in page.url and n == 1, f'{page.url} has={n}')
 
         # ---------- phone width form ----------
         m = await b.new_context(viewport={'width': 390, 'height': 844}, locale='he-IL', is_mobile=True, has_touch=True)
@@ -150,7 +150,8 @@ async def main():
         await page.fill('#lp', 'x'); await page.click('#lb')
         await page.wait_for_selector('.lrow[data-id]')
         rows = await page.eval_on_selector_all('.lrow[data-id]', 'e => e.length')
-        check('dashboard lists demo + new request', rows == 7, str(rows))
+        dups = await page.eval_on_selector_all('.lrow[data-id]:has-text("שגיא רון")', 'e => e.filter(x => x.textContent.includes("ת״ז קיימת")).length')
+        check('dashboard lists demo + 2 new requests, both flagged as same ID', rows == 8 and dups == 2, f'rows={rows} dups={dups}')
         first = await page.text_content('.lrow[data-id] .pname')
         check('awaiting approval sorted first', first in ('נועם בר', 'יוסי לוי', 'שגיא רון'), first)
         await page.screenshot(path=f'{SHOTS}/05-dashboard.png', full_page=True)
@@ -179,6 +180,8 @@ async def main():
         check('reminder lists missing docs + personal link', 'דוח פסיכיאטרי' in msg and '?r=' in msg and 'ועדה' not in msg.split('\n')[2], msg[:120])
         await page.evaluate("window._opened=[]; window.open = (u) => { window._opened.push(String(u)); return null; }")
         await page.click('#viaWa')
+        await page.wait_for_selector('.modal')
+        await page.click('.modal .btn.primary')  # "כן, נשלחה"
         op = await page.evaluate('window._opened')
         check('WhatsApp opens to referrer number with text', bool(op) and str(op[-1]).startswith('https://wa.me/972539876543?text='), str(op)[:90])
         await page.wait_for_timeout(400)
@@ -202,7 +205,7 @@ async def main():
         folder = [k for k in files if k.startswith('שגיא רון - ')]
         check('folder created with name + date', len(folder) == 1, json.dumps(files, ensure_ascii=False))
         if folder:
-            check('4 files written with clear names', len(files[folder[0]]) == 4 and any(f.startswith('טופס החלטת ועדה - שגיא רון') for f in files[folder[0]]), json.dumps(files[folder[0]], ensure_ascii=False))
+            check('3 files written with clear names (the 4th went to the new request)', len(files[folder[0]]) == 3 and any(f.startswith('טופס החלטת ועדה - שגיא רון') for f in files[folder[0]]), json.dumps(files[folder[0]], ensure_ascii=False))
         check('download button gone after full download', await page.query_selector('#dl') is None)
         await page.click('#approve')
         await page.wait_for_selector('.modal')
@@ -214,8 +217,8 @@ async def main():
         check('thanks text exact', 'תודה רבה, כל מסמכי הקליטה של שגיא רון התקבלו.' in tmsg)
         await page.click('.modal [data-close]')
         await page.click('#back')
-        st = await page.text_content('.lrow[data-id]:has-text("שגיא רון") .badge')
-        check('status now אושר', st.strip() == 'אושר', st)
+        st = await page.eval_on_selector_all('.lrow[data-id]:has-text("שגיא רון") .badge', 'e => e.map(x => x.textContent.trim())')
+        check('status now אושר', sorted(st) == ['אושר', 'בתהליך'], str(st))
 
         # partial download then add-on: referrer of יוסי לוי adds a file later
         await page.click('.lrow[data-id]:has-text("יוסי לוי")')

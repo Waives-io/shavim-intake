@@ -59,10 +59,23 @@ create table if not exists public.files (
 );
 create index if not exists files_request_idx on public.files(request_id);
 
+-- ---------- Trash: storage objects a referrer removed, deleted by the daily job ----------
+create table if not exists public.trash (
+  storage_path text primary key,
+  removed_at   timestamptz not null default now()
+);
+
 -- ---------- Row level security: only staff read/write tables directly ----------
 alter table public.staff    enable row level security;
 alter table public.requests enable row level security;
 alter table public.files    enable row level security;
+alter table public.trash    enable row level security;   -- no policies: service role only
+
+-- Anonymous users never touch tables directly (only through the intake_* functions)
+revoke all on public.staff, public.requests, public.files, public.trash from anon, public;
+revoke all on public.trash from authenticated;
+grant select on public.staff, public.requests, public.files to authenticated;
+grant insert, update, delete on public.requests, public.files to authenticated;
 
 drop policy if exists staff_read_staff on public.staff;
 create policy staff_read_staff on public.staff for select to authenticated using (public.is_staff());
@@ -99,11 +112,24 @@ returns jsonb language sql stable security definer set search_path = public as $
   );
 $$;
 
+-- Israeli ID check digit (same rule as the form)
+create or replace function public._tz_ok(t text)
+returns boolean language plpgsql immutable as $$
+declare s int := 0; n int;
+begin
+  if coalesce(t,'') !~ '^\d{9}$' then return false; end if;
+  for i in 1..9 loop
+    n := substr(t, i, 1)::int * (2 - i % 2);
+    s := s + case when n > 9 then n - 9 else n end;
+  end loop;
+  return s % 10 = 0;
+end $$;
+
 create or replace function public._check_details(p jsonb)
 returns void language plpgsql immutable as $$
 begin
   if coalesce(trim(p->>'participant_name'),'') = '' or length(p->>'participant_name') > 120 then raise exception 'bad_participant_name'; end if;
-  if coalesce(p->>'participant_id','') !~ '^\d{9}$' then raise exception 'bad_participant_id'; end if;
+  if not public._tz_ok(p->>'participant_id') then raise exception 'bad_participant_id'; end if;
   if coalesce(trim(p->>'ref_name'),'') = '' or length(p->>'ref_name') > 120 then raise exception 'bad_ref_name'; end if;
   if coalesce(p->>'ref_email','') !~* '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(p->>'ref_email') > 200 then raise exception 'bad_ref_email'; end if;
   if coalesce(p->>'ref_phone','') !~ '^05\d-\d{7}$' then raise exception 'bad_ref_phone'; end if;
@@ -116,24 +142,14 @@ declare r public.requests; dup boolean;
 begin
   perform public._check_details(p);
   if p_token is null then
-    -- Same ID + same referrer email on an open request → continue that request (no duplicates)
-    select * into r from public.requests
-      where participant_id = p->>'participant_id'
-        and lower(ref_email) = lower(p->>'ref_email')
-        and status <> 'approved'
-      order by created_at desc limit 1;
-    if not found then
-      select exists(select 1 from public.requests where participant_id = p->>'participant_id') into dup;
-      insert into public.requests(participant_name, participant_id, ref_name, ref_email, ref_phone, possible_duplicate)
-      values (trim(p->>'participant_name'), p->>'participant_id', trim(p->>'ref_name'), lower(trim(p->>'ref_email')), p->>'ref_phone', dup)
-      returning * into r;
-      return public._req_json(r) || jsonb_build_object('merged', false);
-    end if;
-    update public.requests set
-      participant_name = trim(p->>'participant_name'), ref_name = trim(p->>'ref_name'),
-      ref_phone = p->>'ref_phone', updated_at = now()
-    where id = r.id returning * into r;
-    return public._req_json(r) || jsonb_build_object('merged', true);
+    -- Always a new request. Never look up or return an existing one by ID/email:
+    -- that would hand a stranger the other request's token. Noa sees both rows flagged.
+    update public.requests set possible_duplicate = true where participant_id = p->>'participant_id';
+    dup := found;
+    insert into public.requests(participant_name, participant_id, ref_name, ref_email, ref_phone, possible_duplicate)
+    values (trim(p->>'participant_name'), p->>'participant_id', trim(p->>'ref_name'), lower(trim(p->>'ref_email')), p->>'ref_phone', dup)
+    returning * into r;
+    return public._req_json(r) || jsonb_build_object('merged', false);
   end if;
 
   update public.requests set
@@ -152,20 +168,25 @@ declare r public.requests;
 begin
   select * into r from public.requests where token = p_token;
   if not found then raise exception 'not_found'; end if;
+  if r.status = 'approved' then return jsonb_build_object('status', 'approved'); end if;  -- closed link: no personal details
   return public._req_json(r);
 end $$;
 
 -- Register a file after it was uploaded to storage under "<token>/..."
 create or replace function public.intake_add_file(p_token uuid, p_doc_type text, p_path text, p_name text, p_size bigint, p_mime text)
 returns jsonb language plpgsql security definer set search_path = public, storage as $$
-declare r public.requests;
+declare r public.requests; meta jsonb;
 begin
   select * into r from public.requests where token = p_token and status <> 'approved';
   if not found then raise exception 'not_found_or_closed'; end if;
-  if p_path not like p_token::text || '/%' then raise exception 'bad_path'; end if;
-  if not exists (select 1 from storage.objects where bucket_id = 'intake' and name = p_path) then raise exception 'file_missing'; end if;
+  if not public._intake_path_ok(p_path) or split_part(p_path, '/', 1) <> p_token::text then raise exception 'bad_path'; end if;
+  select o.metadata into meta from storage.objects o where o.bucket_id = 'intake' and o.name = p_path;
+  if not found then raise exception 'file_missing'; end if;
+  if (select count(*) from public.files where request_id = r.id) >= 20 then raise exception 'too_many_files'; end if;
+  -- size and type come from what storage actually received, not from the caller
   insert into public.files(request_id, doc_type, original_name, storage_path, size_bytes, mime)
-  values (r.id, p_doc_type, left(p_name, 200), p_path, p_size, left(p_mime, 120));
+  values (r.id, p_doc_type, left(p_name, 200), p_path,
+          coalesce((meta->>'size')::bigint, p_size), left(coalesce(meta->>'mimetype', p_mime), 120));
   update public.requests set updated_at = now(), fully_downloaded_at = null where id = r.id returning * into r;
   return public._req_json(r);
 end $$;
@@ -177,7 +198,11 @@ declare r public.requests;
 begin
   select * into r from public.requests where token = p_token and status <> 'approved';
   if not found then raise exception 'not_found_or_closed'; end if;
-  delete from public.files where id = p_file_id and request_id = r.id and downloaded_at is null;
+  -- the stored object goes to trash; the daily job deletes it from storage
+  with gone as (
+    delete from public.files where id = p_file_id and request_id = r.id and downloaded_at is null
+    returning storage_path)
+  insert into public.trash(storage_path) select storage_path from gone on conflict do nothing;
   update public.requests set updated_at = now() where id = r.id returning * into r;
   return public._req_json(r);
 end $$;
@@ -203,8 +228,11 @@ create or replace function public.ping() returns text language sql stable as $$ 
 revoke all on function public.intake_save(uuid, jsonb), public.intake_get(uuid), public.intake_add_file(uuid,text,text,text,bigint,text),
   public.intake_remove_file(uuid,uuid), public.intake_submit(uuid), public.ping() from public;
 grant execute on function public.intake_save(uuid, jsonb), public.intake_get(uuid), public.intake_add_file(uuid,text,text,text,bigint,text),
-  public.intake_remove_file(uuid,uuid), public.intake_submit(uuid), public.ping() to anon, authenticated;
-revoke all on function public._req_json(public.requests), public._check_details(jsonb) from public, anon, authenticated;
+  public.intake_remove_file(uuid,uuid), public.intake_submit(uuid) to anon, authenticated;
+-- ping is for the daily GitHub job only (service role key)
+revoke all on function public.ping() from anon, authenticated;
+grant execute on function public.ping() to service_role;
+revoke all on function public._req_json(public.requests), public._check_details(jsonb), public._tz_ok(text) from public, anon, authenticated;
 
 -- =====================================================================
 -- Storage: private bucket "intake"
@@ -222,9 +250,27 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 grant execute on function public.is_open_token(text) to anon, authenticated;
 
+-- "<token>/<safe name>.<allowed extension>", exactly one folder level
+create or replace function public._intake_path_ok(p text)
+returns boolean language sql immutable as $$
+  select coalesce(p, '') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[A-Za-z0-9_-]{1,80}\.(pdf|jpe?g|png|webp|heic|heif|docx?)$';
+$$;
+grant execute on function public._intake_path_ok(text) to anon, authenticated;
+
+-- At most 20 stored objects per request (one link cannot fill the free quota)
+create or replace function public.intake_slots_left(t text)
+returns boolean language sql stable security definer set search_path = public, storage as $$
+  select (select count(*) from storage.objects where bucket_id = 'intake' and name like t || '/%') < 20;
+$$;
+revoke all on function public.intake_slots_left(text) from public;
+grant execute on function public.intake_slots_left(text) to anon, authenticated;
+
 drop policy if exists intake_upload on storage.objects;
 create policy intake_upload on storage.objects for insert to anon, authenticated
-  with check (bucket_id = 'intake' and public.is_open_token((storage.foldername(name))[1]));
+  with check (bucket_id = 'intake'
+    and public._intake_path_ok(name)
+    and public.is_open_token((storage.foldername(name))[1])
+    and public.intake_slots_left((storage.foldername(name))[1]));
 
 drop policy if exists intake_staff_read on storage.objects;
 create policy intake_staff_read on storage.objects for select to authenticated
