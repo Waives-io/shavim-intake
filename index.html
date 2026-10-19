@@ -175,8 +175,9 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .pill{width:20px;height:20px;border-radius:5px;border:1.5px solid #bdbdbd;display:grid;place-items:center}
 .pill.on{background:var(--green);border-color:var(--green)}
 .pill.opt{border-style:dashed;border-color:#cfcfcf}
-.pill.opt.on{border-style:solid}
-.pill.rep{background:var(--bg);border:2px solid var(--orange)}
+.pill.opt.on{border-style:solid;background:color-mix(in srgb,var(--green) 45%,#fff);border-color:transparent}
+.pill.need{background:var(--bg);border:2px solid var(--orange)}
+.rowact{margin-top:6px;min-height:32px;padding:0 12px;font-size:14px}
 .pill svg{width:11px;height:11px}
 .pills .cnt{font-size:13px;color:var(--muted);margin-inline-start:6px}
 .badge{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;border-radius:999px;padding:3px 12px;white-space:nowrap}
@@ -404,6 +405,16 @@ function mailToNoa(r, kind) {
     <p><a href="${noaLink(r)}">לפתיחת הבקשה בדשבורד</a></p></div>`;
   return sendEmail({to: CFG.noaEmail, subject, html, replyTo: r.ref_email});
 }
+function mailToReferrerDone(r) {
+  const subject = `קיבלנו את מסמכי הקליטה של ${r.participant_name} – עמותת שווים`;
+  const html = `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;line-height:1.6">
+    <p>שלום ${esc(r.ref_name)},</p>
+    <p>קיבלנו את מסמכי הקליטה של <b>${esc(r.participant_name)}</b>. ${esc(CFG.noaName)} תעבור עליהם ותעדכן אותך.</p>
+    ${docsTableHtml(r)}
+    <p>צריך להוסיף או להחליף מסמך? דרך הלינק האישי: <a href="${contLink(r)}">${contLink(r)}</a></p>
+    <p>תודה,<br>${esc(CFG.noaName)} · עמותת שווים</p></div>`;
+  return sendEmail({to: r.ref_email, subject, html});
+}
 function mailToReferrer(r) {
   const miss = missingReq(r);
   const subject = `לינק להשלמת מסמכי הקליטה של ${r.participant_name} – עמותת שווים`;
@@ -606,7 +617,7 @@ function ask(title, text, buttons) {
 /* =====================================================================
    REFERRER FORM
    ===================================================================== */
-const F = {token:null, req:null, saved:null, activeDoc:null, refMailedTo:null};
+const F = {token:null, req:null, saved:null, activeDoc:null, refMailedTo:null, pending:{}};   // pending: files waiting for the details
 const FIELDS = [
   {id:'participant_name', label:'שם מלא של המתמודד', group:1, auto:'off'},
   {id:'participant_id', label:'מספר ת"ז של המתמודד', group:1, ltr:true, mode:'numeric', max:9, hint:'9 ספרות, כולל ספרת ביקורת'},
@@ -627,19 +638,23 @@ function readDetails() {
   return {participant_name: v('participant_name').trim().replace(/\s+/g,' '), participant_id: normTz(v('participant_id')),
     ref_name: v('ref_name').trim().replace(/\s+/g,' '), ref_email: normEmail(v('ref_email')), ref_phone: phoneOk(v('ref_phone')) ? fmtPhone(v('ref_phone')) : v('ref_phone').trim()};
 }
+function fieldMsg(id, v) {
+  if (!v.trim()) return 'שדה חובה';
+  if (id === 'participant_id' && !tzOk(v)) return 'מספר ת"ז לא תקין — בדקו את 9 הספרות';
+  if (id === 'ref_email' && !emailOk(v)) return 'כתובת מייל לא תקינה, למשל name@example.co.il';
+  if (id === 'ref_phone' && !phoneOk(v)) return 'מספר נייד צריך להכיל 10 ספרות ולהתחיל ב-05';
+  if ((id === 'participant_name' || id === 'ref_name') && v.trim().length < 2) return 'נא לכתוב שם מלא';
+  return '';
+}
+const detailsValid = () => FIELDS.every(f => !fieldMsg(f.id, $('#' + f.id).value));
+const hasPending = () => Object.values(F.pending).some(a => a.length);
 function validateField(id) {
-  const el = $('#' + id); const v = el.value; let msg = '';
-  if (!v.trim()) msg = 'שדה חובה';
-  else if (id === 'participant_id' && !tzOk(v)) msg = 'מספר ת"ז לא תקין — בדקו את 9 הספרות';
-  else if (id === 'ref_email' && !emailOk(v)) msg = 'כתובת מייל לא תקינה, למשל name@example.co.il';
-  else if (id === 'ref_phone' && !phoneOk(v)) msg = 'מספר נייד צריך להכיל 10 ספרות ולהתחיל ב-05';
-  else if ((id === 'participant_name' || id === 'ref_name') && v.trim().length < 2) msg = 'נא לכתוב שם מלא';
+  const el = $('#' + id); const v = el.value; const msg = fieldMsg(id, v);
   const box = $('#f-' + id), err = $('#e-' + id);
   box.classList.toggle('bad', !!msg); el.setAttribute('aria-invalid', msg ? 'true' : 'false');
   err.innerHTML = esc(msg);
   if (!msg && id === 'ref_email') { const fx = emailFix(v); if (fx) err.innerHTML = `<span style="color:var(--ink);font-weight:500">התכוונת ל-<button type="button" class="fix ltr" data-fix="${esc(fx)}">${esc(fx)}</button>?</span>`; else checkDomain(v); }
   if (!msg && id === 'ref_phone') el.value = fmtPhone(v);
-  if (!msg && id === 'participant_id') el.value = normTz(v);
   el.dataset.touched = '1';
   return !msg;
 }
@@ -711,7 +726,10 @@ function renderForm() {
   if (r) { FIELDS.forEach(f => $('#' + f.id).value = r[f.id] || ''); F.saved = readDetails(); }
   FIELDS.forEach(f => {
     const el = $('#' + f.id);
-    el.addEventListener('blur', () => { if (el.value.trim() || el.dataset.touched) validateField(f.id); });
+    el.addEventListener('blur', () => {
+      if (el.value.trim() || el.dataset.touched) validateField(f.id);
+      if (hasPending() && detailsValid()) flushPending();   // details complete → upload the waiting files
+    });
     el.addEventListener('input', () => {
       if (f.id === 'participant_id') { const d = el.value.replace(/\D/g, '').slice(0, 9); if (d !== el.value) el.value = d; }   // digits only, up to 9
       if (el.getAttribute('aria-invalid') === 'true') validateField(f.id);
@@ -727,13 +745,15 @@ function renderForm() {
 function renderDocs() {
   const r = F.req || {files:[]};
   $('#docs').innerHTML = DOCS.map(d => {
-    const fs = filesOf(r, d.key);
+    const fs = filesOf(r, d.key), pend = F.pending[d.key] || [];
     return `<div class="doc ${fs.length ? 'has' : ''}" data-doc="${d.key}" tabindex="-1">
       <div class="doc-head"><span class="doc-name">${esc(d.label)}</span>
         <span class="tag ${d.req ? 'req' : ''}">${d.req ? 'חובה' : 'רשות'}</span>
         ${(r.reviews || {})[d.key] === 'replace' ? '<span class="tag rep">צריך להחליף — מעלים קובץ חדש</span>' : ''}
-        <span class="doc-state">${fs.length ? `<span class="ok-dot">${ICON_CHECK}</span>הועלה` : (d.req ? 'חסר' : '')}</span></div>
-      ${fs.length ? `<ul class="doc-files">${fs.map(f => `<li><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
+        <span class="doc-state">${fs.length ? `<span class="ok-dot">${ICON_CHECK}</span>הועלה` : pend.length ? 'ממתין לפרטים' : (d.req ? 'חסר' : '')}</span></div>
+      ${fs.length || pend.length ? `<ul class="doc-files">${pend.map((f, i) => `<li><span class="fname" title="${esc(f.name)}"><bdi>${esc(f.name)}</bdi></span>
+        <span class="fmeta">${fmtSize(f.size)} · יועלה אחרי מילוי הפרטים</span>
+        <button type="button" class="linkbtn x" data-rmp="${d.key}:${i}" aria-label="הסרת ${esc(f.name)}">הסרה</button></li>`).join('')}${fs.map(f => `<li><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
         <span class="fmeta">${fmtSize(f.size_bytes)}</span>
         ${f.locked ? '<span class="fmeta x">התקבל</span>' : `<button type="button" class="linkbtn x" data-rm="${f.id}" aria-label="הסרת ${esc(f.original_name)}">הסרה</button>`}</li>`).join('')}</ul>` : ''}
       <div class="doc-actions">
@@ -750,6 +770,9 @@ function renderDocs() {
     box.addEventListener('dragover', e => { e.preventDefault(); box.classList.add('drag'); });
     box.addEventListener('dragleave', () => box.classList.remove('drag'));
     box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('drag'); handleFiles(key, [...e.dataTransfer.files]); });
+    box.querySelectorAll('[data-rmp]').forEach(b => b.onclick = () => {
+      const [k, i] = b.dataset.rmp.split(':'); F.pending[k].splice(+i, 1); renderDocs(); renderBar();
+    });
     box.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => {
       busy(b, true);
       try { F.req = await API.remove(F.token, b.dataset.rm); renderDocs(); renderBar(); toast('הקובץ הוסר'); }
@@ -758,7 +781,7 @@ function renderDocs() {
   });
 }
 function renderBar() {
-  const r = F.req; const miss = r ? missingReq(r) : REQUIRED;
+  const r = F.req; const miss = REQUIRED.filter(k => !(r && filesOf(r, k).length) && !(F.pending[k] || []).length);
   const resend = r && r.status === 'submitted';
   $('#bar').innerHTML = `
     <button type="button" class="btn primary" id="send" ${miss.length ? 'disabled aria-disabled="true"' : ''}>${resend ? 'שליחת העדכון' : 'שליחת המסמכים'}</button>
@@ -786,6 +809,20 @@ async function ensureSaved() {
   }
   return true;
 }
+// Upload files that were added before the details were filled in
+async function flushPending() {
+  if (!hasPending() || F.flushing) return true;
+  F.flushing = true;
+  try {
+    if (!(await ensureSaved())) return false;
+    for (const k of Object.keys(F.pending)) {
+      while (F.pending[k].length) { F.req = await API.upload(F.token, k, F.pending[k][0]); F.pending[k].shift(); renderDocs(); renderBar(); }
+    }
+    toast('הקבצים הועלו');
+    return true;
+  } catch (e) { console.error(e); toast('ההעלאה לא הצליחה. בדקו את החיבור ונסו שוב.'); return false; }
+  finally { F.flushing = false; }
+}
 async function referrerMailOk() {
   if (F.refMail && await F.refMail) return true;
   const ok = await mailToReferrer(F.req);
@@ -800,6 +837,10 @@ async function handleFiles(key, files) {
   const big = files.find(f => f.size > MAX_MB * 1024 * 1024);
   if (bad) { err.textContent = `הקובץ "${bad.name}" לא נתמך. אפשר PDF, תמונה או Word.`; box.classList.add('bad'); return; }
   if (big) { err.textContent = `הקובץ "${big.name}" גדול מ-${MAX_MB}MB.`; box.classList.add('bad'); return; }
+  if (!F.token && !detailsValid()) {   // details not complete yet: keep the files, upload them later
+    (F.pending[key] ||= []).push(...files); renderDocs(); renderBar();
+    return toast('הקובץ יועלה אחרי מילוי הפרטים');
+  }
   const pick = box.querySelector('[data-pick]');
   try {
     busy(pick, true);
@@ -819,18 +860,18 @@ async function handleFiles(key, files) {
 async function onSend(e) {
   const btn = e.currentTarget; busy(btn, true);
   try {
-    if (!(await ensureSaved())) { busy(btn, false); return; }
+    if (!(await ensureSaved()) || !(await flushPending())) { busy(btn, false); return; }
     const wasSubmitted = F.req.status === 'submitted';
     F.req = await API.submit(F.token);
     // Noa sees the request in the dashboard even if her email fails
-    const [mailOk] = await Promise.all([referrerMailOk(), mailToNoa({...F.req, _resend: wasSubmitted}, 'submit')]);
+    const [mailOk] = await Promise.all([mailToReferrerDone(F.req), mailToNoa({...F.req, _resend: wasSubmitted}, 'submit')]);
     renderThanks(mailOk);
   } catch (err) { console.error(err); busy(btn, false); toast('השליחה לא הצליחה. כל מה שהעליתם נשמר — נסו שוב.'); }
 }
 async function onLater(e) {
   const btn = e.currentTarget; busy(btn, true);
   try {
-    if (!(await ensureSaved())) { busy(btn, false); return; }
+    if (!(await ensureSaved()) || !(await flushPending())) { busy(btn, false); return; }
     const [mailOk] = await Promise.all([referrerMailOk(), mailToNoa(F.req, 'partial')]);
     renderSaved(mailOk);
   } catch (err) { console.error(err); busy(btn, false); toast('השמירה לא הצליחה. נסו שוב.'); }
@@ -848,8 +889,8 @@ function endScreen(title, text, showLink) {
 const MAIL_FAILED = 'לא הצלחנו לשלוח את הלינק האישי במייל. כדאי להעתיק ולשמור אותו:';
 function renderThanks(mailOk = true) {
   endScreen(`תודה! המסמכים של ${esc(F.req.participant_name)} נשלחו`,
-    `${esc(CFG.noaName)} מעמותת שווים תעבור עליהם ותעדכן אותך במייל. ` +
-    (mailOk ? 'צריך להוסיף מסמך? אפשר דרך הלינק שנשלח אליך במייל.' : `צריך להוסיף מסמך? ${MAIL_FAILED}`), !mailOk);
+    `${esc(CFG.noaName)} מעמותת שווים תעבור עליהם ותעדכן אותך. ` +
+    (mailOk ? 'שלחנו אליך אישור במייל, עם לינק להוספת מסמכים.' : `לא הצלחנו לשלוח אליך אישור במייל. לינק להוספת מסמכים — כדאי להעתיק ולשמור אותו:`), !mailOk);
 }
 function renderSaved(mailOk = true) {
   const miss = missingReq(F.req);
@@ -898,7 +939,6 @@ const live = r => !r.archived_at;
 const FILTERS = [
   {id:'all', label:'הכל', test:live},
   {id:'in_progress', label:'בתהליך', test:r => live(r) && r.status === 'in_progress'},
-  {id:'late', label:`ממתינים ${OVERDUE_DAYS}+ ימים`, test:r => live(r) && isLate(r)},
   {id:'submitted', label:'ממתין לאישור', test:r => live(r) && r.status === 'submitted'},
   {id:'approved', label:'אושר', test:r => live(r) && r.status === 'approved'},
   {id:'archived', label:'ארכיון', test:r => !!r.archived_at},
@@ -952,8 +992,10 @@ function linkMsg(wa) {
 }
 function pillsHtml(r) {
   const req = REQUIRED.filter(k => filesOf(r, k).length).length;
+  // red = needs attention (required and missing, or marked "replace"); light green = optional document
   return `<span class="pills">${DOCS.map(d => { const on = filesOf(r, d.key).length > 0, rp = (r.reviews || {})[d.key] === 'replace';
-    return `<span class="pill ${rp ? 'rep' : on ? 'on' : ''} ${d.req ? '' : 'opt'}" title="${esc(d.label)}${rp ? ' – צריך להחליף' : on ? ' – הועלה' : ' – חסר'}">${on && !rp ? ICON_CHECK : ''}</span>`; }).join('')}
+    const need = rp || (d.req && !on);
+    return `<span class="pill ${need ? 'need' : on ? 'on' : ''} ${d.req ? '' : 'opt'}" title="${esc(d.label)}${rp ? ' – צריך להחליף' : on ? ' – הועלה' : ' – חסר'}">${on && !rp ? ICON_CHECK : ''}</span>`; }).join('')}
     <span class="cnt">${req}/${REQUIRED.length}</span></span>`;
 }
 function foldHtml(r) {
@@ -972,16 +1014,25 @@ function renderRows() {
     const got = REQUIRED.filter(k => filesOf(r, k).length).length;
     const label = `${r.participant_name}, ת"ז ${r.participant_id}${r.possible_duplicate ? ', ת"ז קיימת בבקשה אחרת' : ''}. גורם מפנה: ${r.ref_name}. ` +
       `מסמכי חובה: ${got} מתוך ${REQUIRED.length}. נפתח: ${fmtDate(r.created_at)}. סטטוס: ${STATUS[r.status].label}${late ? `, ממתין ${daysSince(r.created_at)} ימים` : ''}.`;
-    return `<button class="lrow ${D.flashId === r.id ? 'flash' : ''}" data-id="${r.id}" aria-label="${esc(label)}">
+    const act = late ? `<br><button class="btn small rowact" data-act="remind" data-id="${r.id}">שליחת תזכורת</button>`
+      : r.status === 'approved' && !r.archived_at ? `<br><button class="btn small rowact" data-act="arch" data-id="${r.id}">העברה לארכיון</button>` : '';
+    return `<div class="lrow ${D.flashId === r.id ? 'flash' : ''}" data-id="${r.id}" role="button" tabindex="0" aria-label="${esc(label)}">
       <span class="c-n"><span class="pname">${esc(r.participant_name)}</span><br><span class="sub ltr">${esc(r.participant_id)}</span>${r.possible_duplicate ? ' <span class="sub">· ת״ז קיימת בבקשה אחרת</span>' : ''}</span>
       <span class="c-r">${esc(r.ref_name)}<br><bdi class="sub ltr">${esc(r.ref_phone)}</bdi></span>
       <span class="c-p">${pillsHtml(r)}</span>
       <span class="c-d">${fmtDate(r.created_at)}<br><span class="sub">${daysAgoTxt(daysSince(r.created_at))}</span></span>
-      <span class="c-s"><span class="badge ${STATUS[r.status].cls}">${STATUS[r.status].label}</span>${late ? `<br><span class="late">ממתין ${daysSince(r.created_at)} ימים</span>` : ''}</span>
-      <span class="c-f">${foldHtml(r)}</span></button>`;
+      <span class="c-s"><span class="badge ${STATUS[r.status].cls}">${STATUS[r.status].label}</span>${late ? `<br><span class="late">ממתין ${daysSince(r.created_at)} ימים</span>` : ''}${act}</span>
+      <span class="c-f">${foldHtml(r)}</span></div>`;
   }).join('');
   D.flashId = null;
-  $$('.lrow[data-id]').forEach(b => b.onclick = () => openDrawer(b.dataset.id));
+  $$('.lrow[data-id]').forEach(b => {
+    b.onclick = e => { if (!e.target.closest('[data-act]')) openDrawer(b.dataset.id); };
+    b.onkeydown = e => { if (e.target === b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrawer(b.dataset.id); } };
+  });
+  $$('[data-act]').forEach(b => b.onclick = e => {
+    e.stopPropagation(); const r = D.list.find(x => x.id === b.dataset.id); if (!r) return;
+    if (b.dataset.act === 'remind') doRemind(r); else doArchive(r, b);
+  });
 }
 
 /* ---------- drawer ---------- */
@@ -1013,6 +1064,7 @@ function fillDrawer(r, dr = $('.drawer')) {
   }
   else if (!r.thanks_sent_at) primary = `<button class="btn primary" id="thanks">שליחת תודה לגורם המפנה</button>`;
   const dl = !purged && pending.length ? `<button class="btn" id="dl">הורדה לתיקייה (${pending.length})</button>` : '';
+  const arch = r.status === 'approved' ? `<button class="btn" id="arch">${r.archived_at ? 'החזרה מהארכיון' : 'העברה לארכיון'}</button>` : '';
   const hist = [
     ['נפתח', r.created_at], ['נשלח', r.submitted_at], ['תזכורת אחרונה', r.last_reminder_at], ['אושר', r.approved_at],
     ['תודה נשלחה', r.thanks_sent_at], ['הורדה אחרונה', r.last_download_at], ['נמחק מהענן', r.purged_at]].filter(x => x[1]).map(x => `${x[0]}: ${fmtDate(x[1])}`).join(' · ');
@@ -1041,9 +1093,9 @@ function fillDrawer(r, dr = $('.drawer')) {
             ${f.downloaded_at ? '<span class="in">בתיקייה ✓</span>' : '<span class="new">חדש</span>'}
             ${purged ? '' : `<button class="linkbtn x" data-view="${f.id}">צפייה</button>`}</div>`).join('')}</div>`; }).join('')}</div>
       <div class="hist">${hist}</div>
-      <div class="danger">${r.status === 'approved' ? `<button class="linkbtn" id="arch">${r.archived_at ? 'החזרה מהארכיון' : 'העברה לארכיון'}</button> · ` : ''}<button class="linkbtn" id="del">מחיקת הבקשה</button></div>
+      <div class="danger"><button class="linkbtn" id="del">מחיקת הבקשה</button></div>
     </div>
-    ${primary || dl ? `<div class="dr-actions">${primary}${dl}${why ? `<span class="why">${why}</span>` : ''}</div>` : ''}`;
+    ${primary || dl || arch ? `<div class="dr-actions">${primary}${dl}${arch}${why ? `<span class="why">${why}</span>` : ''}</div>` : ''}`;
   dr.querySelector('#back').onclick = closeDrawer;
   dr.querySelectorAll('[data-view]').forEach(b => b.onclick = async () => {
     const f = fs.find(x => x.id === b.dataset.view); const w = window.open('', '_blank');
@@ -1102,7 +1154,7 @@ function composeAndSend(r, {title, subject, textFor, stamp}) {
 }
 async function doRemind(r) {
   const sent = await composeAndSend(r, {title:`תזכורת ל${r.ref_name}`, subject:`תזכורת: מסמכי הקליטה של ${r.participant_name} – עמותת שווים`, textFor:reminderText, stamp:'last_reminder_at'});
-  if (sent) { await refresh(r); toast(`התזכורת ל${r.ref_name} נרשמה`); }
+  if (sent) { if ($('.drawer')) await refresh(r); else await loadDash(true); toast(`התזכורת ל${r.ref_name} נרשמה`); }
 }
 async function doThanks(r) {
   const sent = await composeAndSend(r, {title:`הודעת תודה ל${r.ref_name}`, subject:`מסמכי הקליטה של ${r.participant_name} התקבלו – עמותת שווים`, textFor:thanksText, stamp:'thanks_sent_at'});
