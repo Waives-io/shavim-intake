@@ -1123,7 +1123,7 @@ function reminderText(r, wa) {
   return `שלום ${r.ref_name},\nתזכורת קטנה מ${b('עמותת שווים')}: ${parts.join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
 }
 function thanksText(r) {
-  return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\n\n${CFG.noaName} · עמותת שווים`;
+  return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\nנשמח להמשיך לשתף פעולה גם בהמשך.\n\n${CFG.noaName} · עמותת שווים`;
 }
 // Opens the draft in WhatsApp / mail; the date is recorded only after Noa confirms she sent it
 function composeAndSend(r, {title, subject, textFor, stamp}) {
