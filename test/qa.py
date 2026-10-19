@@ -80,9 +80,19 @@ async def main():
         await page.wait_for_timeout(300)
         bad = await page.eval_on_selector_all('.field.bad', 'els => els.map(e => e.id)')
         check('upload blocked until details valid', 'f-participant_name' in bad, str(bad))
+        stuck = await page.eval_on_selector('.doc[data-doc=committee] [data-pick]', 'b => b.disabled || b.classList.contains("busy")')
+        check('upload button not stuck after blocked upload', not stuck)
+        await page.fill('#participant_id', '')
+        await page.type('#participant_id', '0345a678912345')
+        check('ID field keeps digits only, max 9', await page.input_value('#participant_id') == '034567891', await page.input_value('#participant_id'))
 
         await page.fill('#participant_name', 'שגיא רון')
         await page.fill('#ref_name', 'אלה מור')
+        await page.fill('#ref_email', 'fff@gnai.il')
+        await page.focus('#ref_name')
+        await page.wait_for_timeout(1500)
+        hint = await page.text_content('#e-ref_email')
+        check('email with a non-existent domain gets a hint', 'לא מצאנו' in hint, hint)
         await page.fill('#ref_email', 'ella@gmial.com')
         await page.focus('#ref_phone')
         hint = await page.text_content('#e-ref_email')
@@ -196,13 +206,34 @@ async def main():
         check('reminder date recorded', 'תזכורת אחרונה' in hist, hist)
         await page.click('#back')
 
+        # per-document review on a submitted request
+        await page.click('.lrow[data-id]:has-text("נועם בר")')
+        await page.wait_for_selector('.drawer #approve')
+        await page.click('.drawer [data-rv=psychiatric][data-st=replace]')
+        await page.wait_for_selector('.drawer #remind')
+        check('"replace" swaps approve for a reminder', await page.query_selector('.drawer #approve') is None)
+        await page.click('#remind')
+        msg = await page.input_value('#msg')
+        check('reminder lists the document to replace', 'להחליף' in msg and 'דוח פסיכיאטרי' in msg, msg[:160])
+        await page.click('.modal [data-close]')
+        tok = await page.evaluate("JSON.parse(localStorage.getItem('shavim-demo-v1')).requests.find(r => r.participant_name === 'נועם בר').token")
+        rp = await ctx.new_page(); await rp.goto(BASE + '?r=' + tok); await rp.wait_for_selector('.doc[data-doc=psychiatric]')
+        check('referrer sees "צריך להחליף" on that document', await rp.query_selector('.doc[data-doc=psychiatric] .tag.rep') is not None)
+        await rp.close()
+        for d in ['committee', 'psychiatric', 'social']:
+            await page.click(f'.drawer [data-rv={d}][data-st=ok]')
+            await page.wait_for_timeout(300)
+        await page.wait_for_selector('.modal')
+        check('all required "תקין" → approved + asks about thanks', 'לשלוח תודה' in await page.text_content('.modal'))
+        await page.click('.modal .btn.ghost')
+        await page.click('#back')
+
         # approve the new request + download
         await page.click('.lrow[data-id]:has-text("שגיא רון")')
         await page.wait_for_selector('.drawer #approve')
         await page.click('#dl')
-        await page.wait_for_selector('.modal')
-        await page.click('.modal .btn.primary')  # choose folder
         await page.wait_for_selector('.drawer .in')
+        check('download opens no extra dialog', await page.query_selector('.modal') is None)
         await page.wait_for_timeout(500)
         files = await page.evaluate("""async () => {
           const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('טפסי קליטת מתמודד חדש');
@@ -254,20 +285,18 @@ async def main():
         yf = [k for k in files if k.startswith('יוסי לוי')]
         check('second download adds into the same folder', len(yf) == 1 and len(files[yf[0]]) == 5, json.dumps(files, ensure_ascii=False))
 
-        # name search: folder exists but request doesn't know it → asks
+        # existing folder for the participant: reused without asking, same-name file overwritten
         await page.evaluate("""async () => { const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('טפסי קליטת מתמודד חדש');
-            await root.getDirectoryHandle('נועם בר - 01.10.2026', {create:true}); }""")
+            const d = await root.getDirectoryHandle('נועם בר - 01.10.2026', {create:true});
+            const w = await (await d.getFileHandle('טופס החלטת ועדה - נועם בר.pdf', {create:true})).createWritable(); await w.write('OLD'); await w.close(); }""")
         await page.click('#back')
         await page.click('.lrow[data-id]:has-text("נועם בר")')
         await page.click('#dl')
-        await page.wait_for_selector('.modal [data-k]')
-        opts = await page.eval_on_selector_all('.modal [data-k]', 'e => e.map(x => x.textContent)')
-        check('existing folder found by participant name', any('נועם בר - 01.10.2026' in o for o in opts), str(opts))
-        await page.click('.modal [data-k="0"]')
-        await page.wait_for_timeout(800)
+        await page.wait_for_timeout(1000)
+        check('existing participant folder reused without asking', await page.query_selector('.modal') is None)
         files = await page.evaluate("""async () => { const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('טפסי קליטת מתמודד חדש');
-          const h = await root.getDirectoryHandle('נועם בר - 01.10.2026'); const o=[]; for await (const [fn] of h.entries()) o.push(fn); return o; }""")
-        check('files added to the found folder', len(files) == 4, json.dumps(files, ensure_ascii=False))
+          const h = await root.getDirectoryHandle('נועם בר - 01.10.2026'); const o={}; for await (const [fn, fh] of h.entries()) o[fn] = (await (await fh.getFile()).text()).slice(0, 8); return o; }""")
+        check('files written into it, same name overwritten', len(files) == 4 and files.get('טופס החלטת ועדה - נועם בר.pdf', 'OLD') != 'OLD', json.dumps(files, ensure_ascii=False))
         await page.click('#back')
         await page.screenshot(path=f'{SHOTS}/07-dashboard-after.png', full_page=True)
 

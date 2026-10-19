@@ -53,7 +53,8 @@ async def main():
         dl = await v.wait_for_event('download', timeout=15000)
         data = open(await dl.path(), 'rb').read()
         check('Noa opens a file (bytes from the Worker)', dl.url.startswith('blob:') and data.startswith(b'%PDF'), dl.url[:40]); await v.close()
-        await page.click('#approve')
+        for d in ['committee', 'psychiatric', 'social']:   # approve document by document
+            await page.click(f'.drawer [data-rv={d}][data-st=ok]'); await page.wait_for_timeout(600)
         await page.wait_for_selector('.modal'); await page.click('.modal .btn.ghost')  # no thanks now
         await page.wait_for_selector('.drawer .badge.st-ok', timeout=10000)
         check('approved', True)

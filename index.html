@@ -176,6 +176,7 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .pill.on{background:var(--green);border-color:var(--green)}
 .pill.opt{border-style:dashed;border-color:#cfcfcf}
 .pill.opt.on{border-style:solid}
+.pill.rep{background:var(--bg);border:2px solid var(--orange)}
 .pill svg{width:11px;height:11px}
 .pills .cnt{font-size:13px;color:var(--muted);margin-inline-start:6px}
 .badge{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;border-radius:999px;padding:3px 12px;white-space:nowrap}
@@ -212,6 +213,12 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .ditem .dh{display:flex;align-items:center;gap:8px;font-weight:700}
 .ditem .dh .miss{margin-inline-start:auto;font-size:13px;color:var(--muted);font-weight:600}
 .ditem .dh .miss.r{color:var(--orange)}
+.rvb{display:flex;gap:6px;margin-inline-start:auto}
+.rv{border:1.5px solid var(--line);background:var(--bg);border-radius:999px;padding:2px 12px;font-size:14px;font-weight:600;cursor:pointer;min-height:32px;color:var(--ink)}
+.rv:hover{border-color:var(--ink)}
+.rv.ok[aria-pressed=true]{border:2px solid var(--green);font-weight:800}
+.rv.rep[aria-pressed=true]{border:2px solid var(--orange);font-weight:800}
+.tag.rep{border:2px solid var(--orange);color:var(--ink);font-weight:700}
 .frow{display:flex;align-items:center;gap:10px;font-size:14px;margin-top:6px;flex-wrap:wrap}
 .frow .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
 .frow .in{font-size:13px;font-weight:600}
@@ -229,7 +236,6 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .mbox p{color:var(--muted);margin:0 0 14px}
 .mbtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
 .textarea{min-height:170px;resize:vertical;line-height:1.6}
-.path{direction:ltr;text-align:left;background:var(--soft);border-radius:8px;padding:8px 10px;font-size:14px;margin:6px 0 14px;word-break:break-all}
 .pick{display:flex;flex-direction:column;gap:8px}
 
 /* ---------- login ---------- */
@@ -337,6 +343,7 @@ function tzOk(v) {
 /* ---------- request helpers ---------- */
 const filesOf = (r, key) => (r.files || []).filter(f => f.doc_type === key);
 const missingReq = r => REQUIRED.filter(k => !filesOf(r, k).length);
+const toReplace = r => DOCS.map(d => d.key).filter(k => (r.reviews || {})[k] === 'replace');
 const isLate = r => r.status === 'in_progress' && daysSince(r.created_at) >= OVERDUE_DAYS;
 const contLink = r => `${BASE_URL}?r=${r.token}`;
 const noaLink = r => `${BASE_URL}?noa&open=${r.id || ''}`;
@@ -450,6 +457,7 @@ const LiveAPI = {
   async logout() { try { await call('/api/staff/logout', {method:'POST', staff:true}); } catch {} staffToken.set(null); },
   list: () => call('/api/staff/requests', {staff:true}),
   update: (id, patch) => call(`/api/staff/requests/${id}`, {method:'PATCH', json:patch, staff:true}),
+  review: (id, doc, state) => call(`/api/staff/requests/${id}/docs/${doc}`, {method:'PUT', json:{state}, staff:true}),
   async markFiles(ids, patch) { if (ids.length) await call('/api/staff/files', {method:'PATCH', json:{ids, ...patch}, staff:true}); },
   blob: f => call(`/api/staff/files/${f.id}`, {staff:true, raw:true}),
   async viewUrl(f) { return URL.createObjectURL(await this.blob(f)); },
@@ -463,7 +471,7 @@ const Demo = {
   load() { try { return JSON.parse(localStorage.getItem(DEMO_KEY)) || null; } catch { return null; } },
   store(db) { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch {} },
   db() { let d = this.load(); if (!d) { d = seedDemo(); this.store(d); } return d; },
-  pub(r) { return {token:r.token, participant_name:r.participant_name, participant_id:r.participant_id, ref_name:r.ref_name, ref_email:r.ref_email, ref_phone:r.ref_phone, status:r.status, created_at:r.created_at,
+  pub(r) { return {token:r.token, participant_name:r.participant_name, participant_id:r.participant_id, ref_name:r.ref_name, ref_email:r.ref_email, ref_phone:r.ref_phone, status:r.status, created_at:r.created_at, reviews:{...(r.reviews || {})},
     files:r.files.map(f => ({id:f.id, doc_type:f.doc_type, original_name:f.original_name, size_bytes:f.size_bytes, uploaded_at:f.uploaded_at, locked:!!f.downloaded_at}))}; },
   find(db, token) { const r = db.requests.find(x => x.token === token); if (!r) throw new Error('not_found'); return r; },
   open(db, token) { const r = this.find(db, token); if (r.status === 'approved') throw new Error('not_found_or_closed'); return r; },
@@ -485,9 +493,14 @@ const DemoAPI = {
     const db = Demo.db(); const r = Demo.open(db, token); const id = uid();
     await idb.set('blobs', id, file);
     r.files.push({id, doc_type:doc, original_name:file.name, size_bytes:file.size, mime:fileMime(file), uploaded_at:new Date().toISOString(), downloaded_at:null, storage_path:id});
+    if (r.reviews) delete r.reviews[doc];   // new file → Noa checks again
     r.fully_downloaded_at = null; r.updated_at = new Date().toISOString(); Demo.store(db); return Demo.pub(r);
   },
-  async remove(token, fileId) { const db = Demo.db(); const r = Demo.open(db, token); r.files = r.files.filter(f => !(f.id === fileId && !f.downloaded_at)); Demo.store(db); return Demo.pub(r); },
+  async remove(token, fileId) {
+    const db = Demo.db(); const r = Demo.open(db, token); const f = r.files.find(x => x.id === fileId && !x.downloaded_at);
+    if (f) { r.files = r.files.filter(x => x !== f); if (r.reviews) delete r.reviews[f.doc_type]; }
+    Demo.store(db); return Demo.pub(r);
+  },
   async submit(token) {
     const db = Demo.db(); const r = Demo.open(db, token);
     if (missingReq(r).length) throw new Error('missing_required');
@@ -498,6 +511,13 @@ const DemoAPI = {
   async logout() { try { sessionStorage.removeItem('shavim-demo-login'); } catch {} },
   async list() { return structuredClone(Demo.db().requests); },
   async update(id, patch) { const db = Demo.db(); Object.assign(db.requests.find(r => r.id === id), patch); Demo.store(db); },
+  async review(id, doc, state) {   // same rule as the Worker: all required 'ok' → approved
+    const db = Demo.db(); const r = db.requests.find(x => x.id === id); r.reviews = r.reviews || {};
+    if (state) r.reviews[doc] = state; else delete r.reviews[doc];
+    const approved = REQUIRED.every(k => r.reviews[k] === 'ok');
+    if (approved) { const t = new Date().toISOString(); Object.assign(r, {status:'approved', approved_at:t, submitted_at:r.submitted_at || t}); }
+    Demo.store(db); return {ok:true, approved, reviews:{...r.reviews}};
+  },
   async markFiles(ids, patch) { const db = Demo.db(); db.requests.forEach(r => r.files.forEach(f => { if (ids.includes(f.id)) Object.assign(f, patch); })); Demo.store(db); },
   async blob(f) { return (await idb.get('blobs', f.id)) || demoPdf(f.original_name); },
   async viewUrl(f) { return URL.createObjectURL(await this.blob(f)); },
@@ -589,7 +609,7 @@ function ask(title, text, buttons) {
 const F = {token:null, req:null, saved:null, activeDoc:null, refMailedTo:null};
 const FIELDS = [
   {id:'participant_name', label:'שם מלא של המתמודד', group:1, auto:'off'},
-  {id:'participant_id', label:'מספר ת"ז של המתמודד', group:1, ltr:true, mode:'numeric', hint:'9 ספרות, כולל ספרת ביקורת'},
+  {id:'participant_id', label:'מספר ת"ז של המתמודד', group:1, ltr:true, mode:'numeric', max:9, hint:'9 ספרות, כולל ספרת ביקורת'},
   {id:'ref_name', label:'שם הגורם המפנה', group:2, auto:'name'},
   {id:'ref_email', label:'מייל', group:2, ltr:true, type:'email', mode:'email', auto:'email', ph:'name@example.co.il', hint:'לכאן יישלח לינק להשלמה'},
   {id:'ref_phone', label:'נייד', group:2, ltr:true, type:'tel', mode:'tel', auto:'tel', ph:'050-0000000'},
@@ -598,7 +618,7 @@ function fieldHtml(f) {
   return `<div class="field" id="f-${f.id}">
     <label for="${f.id}">${esc(f.label)} <span class="req" aria-hidden="true">*</span></label>
     <input id="${f.id}" name="${f.id}" type="${f.type || 'text'}" ${f.mode ? `inputmode="${f.mode}"` : ''} ${f.auto ? `autocomplete="${f.auto}"` : ''}
-      ${f.ltr ? 'dir="ltr"' : ''} ${f.ph ? `placeholder="${esc(f.ph)}"` : ''} required aria-required="true" aria-describedby="e-${f.id}${f.hint ? ` h-${f.id}` : ''}">
+      ${f.ltr ? 'dir="ltr"' : ''} ${f.max ? `maxlength="${f.max}"` : ''} ${f.ph ? `placeholder="${esc(f.ph)}"` : ''} required aria-required="true" aria-describedby="e-${f.id}${f.hint ? ` h-${f.id}` : ''}">
     ${f.hint ? `<div class="hint" id="h-${f.id}">${esc(f.hint)}</div>` : ''}
     <div class="err" id="e-${f.id}" aria-live="polite"></div></div>`;
 }
@@ -617,11 +637,28 @@ function validateField(id) {
   const box = $('#f-' + id), err = $('#e-' + id);
   box.classList.toggle('bad', !!msg); el.setAttribute('aria-invalid', msg ? 'true' : 'false');
   err.innerHTML = esc(msg);
-  if (!msg && id === 'ref_email') { const fx = emailFix(v); if (fx) err.innerHTML = `<span style="color:var(--ink);font-weight:500">התכוונת ל-<button type="button" class="fix ltr" data-fix="${esc(fx)}">${esc(fx)}</button>?</span>`; }
+  if (!msg && id === 'ref_email') { const fx = emailFix(v); if (fx) err.innerHTML = `<span style="color:var(--ink);font-weight:500">התכוונת ל-<button type="button" class="fix ltr" data-fix="${esc(fx)}">${esc(fx)}</button>?</span>`; else checkDomain(v); }
   if (!msg && id === 'ref_phone') el.value = fmtPhone(v);
   if (!msg && id === 'participant_id') el.value = normTz(v);
   el.dataset.touched = '1';
   return !msg;
+}
+// Gentle check that the email's domain exists (Cloudflare public DNS). Never blocks; silent if offline.
+const DOMAINS = {};
+async function checkDomain(v) {
+  const dom = normEmail(v).split('@')[1]; if (!dom) return;
+  if (!(dom in DOMAINS)) {
+    DOMAINS[dom] = (async () => {
+      try {
+        const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(dom)}&type=MX`, {headers:{accept:'application/dns-json'}});
+        const j = await res.json(); return j.Status !== 3;   // 3 = domain does not exist
+      } catch { return true; }
+    })();
+  }
+  const ok = await DOMAINS[dom];
+  const err = $('#e-ref_email');
+  if (!ok && err && normEmail($('#ref_email').value).split('@')[1] === dom && !err.textContent)
+    err.innerHTML = `<span style="color:var(--ink);font-weight:500">לא מצאנו את הכתובת <bdi class="ltr">${esc(dom)}</bdi> — כדאי לבדוק את המייל.</span>`;
 }
 function validateAll() {
   let first = null;
@@ -669,16 +706,21 @@ function renderForm() {
     </form>
     <p class="foot">שאלות? ${esc(CFG.noaName)} מעמותת שווים ·
       <a href="https://wa.me/${waPhone(CFG.whatsappBusiness)}" target="_blank" rel="noopener">WhatsApp <bdi class="ltr">${esc(CFG.whatsappBusiness)}</bdi></a> ·
-      <a href="mailto:${esc(CFG.noaEmail)}"><bdi class="ltr">${esc(CFG.noaEmail)}</bdi></a></p></div>`;
+      <a href="mailto:${esc(CFG.noaEmail)}" id="noamail"><bdi class="ltr">${esc(CFG.noaEmail)}</bdi></a></p></div>`;
 
   if (r) { FIELDS.forEach(f => $('#' + f.id).value = r[f.id] || ''); F.saved = readDetails(); }
   FIELDS.forEach(f => {
     const el = $('#' + f.id);
     el.addEventListener('blur', () => { if (el.value.trim() || el.dataset.touched) validateField(f.id); });
-    el.addEventListener('input', () => { if (el.getAttribute('aria-invalid') === 'true') validateField(f.id); });
+    el.addEventListener('input', () => {
+      if (f.id === 'participant_id') { const d = el.value.replace(/\D/g, '').slice(0, 9); if (d !== el.value) el.value = d; }   // digits only, up to 9
+      if (el.getAttribute('aria-invalid') === 'true') validateField(f.id);
+    });
   });
   $('#form').addEventListener('click', e => { const b = e.target.closest('[data-fix]'); if (b) { $('#ref_email').value = b.dataset.fix; validateField('ref_email'); } });
   $('#form').addEventListener('submit', e => e.preventDefault());
+  // the mail link also copies the address (many computers have no mail app)
+  $('#noamail').addEventListener('click', () => { copyText(CFG.noaEmail); toast(`המייל הועתק: ${CFG.noaEmail}`); });
   document.addEventListener('paste', onPaste);
   renderDocs(); renderBar();
 }
@@ -689,6 +731,7 @@ function renderDocs() {
     return `<div class="doc ${fs.length ? 'has' : ''}" data-doc="${d.key}" tabindex="-1">
       <div class="doc-head"><span class="doc-name">${esc(d.label)}</span>
         <span class="tag ${d.req ? 'req' : ''}">${d.req ? 'חובה' : 'רשות'}</span>
+        ${(r.reviews || {})[d.key] === 'replace' ? '<span class="tag rep">צריך להחליף — מעלים קובץ חדש</span>' : ''}
         <span class="doc-state">${fs.length ? `<span class="ok-dot">${ICON_CHECK}</span>הועלה` : (d.req ? 'חסר' : '')}</span></div>
       ${fs.length ? `<ul class="doc-files">${fs.map(f => `<li><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
         <span class="fmeta">${fmtSize(f.size_bytes)}</span>
@@ -760,7 +803,7 @@ async function handleFiles(key, files) {
   const pick = box.querySelector('[data-pick]');
   try {
     busy(pick, true);
-    if (!(await ensureSaved())) return;
+    if (!(await ensureSaved())) { busy(pick, false); return; }
     for (let i = 0; i < files.length; i++) {
       pick.textContent = files.length > 1 ? `מעלה ${i+1} מתוך ${files.length}…` : 'מעלה…';
       F.req = await API.upload(F.token, key, files[i]);
@@ -881,31 +924,21 @@ async function autoPurge() {
     catch (e) { console.warn('purge failed', e); }
   }
 }
-async function folderLabel() {
-  if (!('showDirectoryPicker' in window)) return `<span>ההורדה לתיקייה עובדת ב-Chrome או Edge במחשב.</span>`;
-  const h = await idb.get('kv', 'root').catch(() => null);
-  return h ? `<span>ההורדות נשמרות בתיקייה <b>${esc(h.name)}</b></span><button class="linkbtn" id="chdir">החלפת תיקייה</button>`
-           : `<span>עוד לא נבחרה תיקייה להורדות.</span><button class="linkbtn" id="chdir" style="color:var(--ink)">בחירת תיקייה</button>`;
-}
 function renderDash() {
   const counts = Object.fromEntries(FILTERS.map(f => [f.id, D.list.filter(f.test).length]));
   $('#app').innerHTML = `<div class="wrap wide">
-    <div class="dash-head"><h1>בקשות קליטה</h1>
+    <div class="dash-head"><h1>סטטוס מסמכי חובה לקליטת מתמודד חדש</h1>
       <div class="share">
         <button class="btn small" id="cplink">העתקת הלינק לטופס</button>
         <button class="btn small" id="walink">שליחה ב-WhatsApp</button>
         <button class="btn small" id="mllink">שליחה במייל</button></div></div>
-    <div class="folderline" id="folderline"></div>
+    ${'showDirectoryPicker' in window ? '' : '<div class="folderline">ההורדה לתיקייה עובדת ב-Chrome או Edge במחשב.</div>'}
     <div class="toolbar">
       <div class="chips" role="group" aria-label="סינון">${FILTERS.map(f =>
         `<button class="chip" data-f="${f.id}" aria-pressed="${D.filter === f.id}">${esc(f.label)}<span class="n">${counts[f.id]}</span></button>`).join('')}</div>
       <label class="search"><span class="sr">חיפוש</span><input id="q" type="search" placeholder="חיפוש לפי שם, ת״ז או גורם מפנה" value="${esc(D.q)}"></label>
     </div>
     <div class="list" id="list"></div></div>`;
-  folderLabel().then(html => {
-    const fl = $('#folderline'); if (!fl) return; fl.innerHTML = html;
-    const ch = $('#chdir'); if (ch) ch.onclick = () => pickRoot().then(() => renderDash());
-  });
   $$('.chip').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
   $('#q').oninput = e => { D.q = e.target.value; renderRows(); };
   $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
@@ -919,8 +952,8 @@ function linkMsg(wa) {
 }
 function pillsHtml(r) {
   const req = REQUIRED.filter(k => filesOf(r, k).length).length;
-  return `<span class="pills">${DOCS.map(d => { const on = filesOf(r, d.key).length > 0;
-    return `<span class="pill ${on ? 'on' : ''} ${d.req ? '' : 'opt'}" title="${esc(d.label)}${on ? ' – הועלה' : ' – חסר'}">${on ? ICON_CHECK : ''}</span>`; }).join('')}
+  return `<span class="pills">${DOCS.map(d => { const on = filesOf(r, d.key).length > 0, rp = (r.reviews || {})[d.key] === 'replace';
+    return `<span class="pill ${rp ? 'rep' : on ? 'on' : ''} ${d.req ? '' : 'opt'}" title="${esc(d.label)}${rp ? ' – צריך להחליף' : on ? ' – הועלה' : ' – חסר'}">${on && !rp ? ICON_CHECK : ''}</span>`; }).join('')}
     <span class="cnt">${req}/${REQUIRED.length}</span></span>`;
 }
 function foldHtml(r) {
@@ -971,9 +1004,13 @@ function openDrawer(id) {
 function fillDrawer(r, dr = $('.drawer')) {
   const miss = missingReq(r), fs = r.files || [], pending = fs.filter(f => !f.downloaded_at);
   const purged = !!r.purged_at;
+  const rep = toReplace(r), open = r.status !== 'approved', rv = r.reviews || {};
   let primary = '', why = '';
-  if (r.status === 'submitted') primary = `<button class="btn primary" id="approve">אישור קבלת המסמכים</button>`;
-  else if (r.status === 'in_progress') { primary = `<button class="btn primary" id="remind">שליחת תזכורת</button>`; why = `אפשר לאשר אחרי שיגיעו כל מסמכי החובה (חסרים ${miss.length}).`; }
+  if (r.status === 'submitted' && !rep.length) primary = `<button class="btn primary" id="approve">אישור קבלת המסמכים</button>`;
+  else if (open) {
+    primary = `<button class="btn primary" id="remind">שליחת תזכורת</button>`;
+    why = rep.length ? `סומנו להחלפה: ${rep.map(k => DOC[k].label).join(' · ')}.` : `אפשר לאשר אחרי שיגיעו כל מסמכי החובה (חסרים ${miss.length}).`;
+  }
   else if (!r.thanks_sent_at) primary = `<button class="btn primary" id="thanks">שליחת תודה לגורם המפנה</button>`;
   const dl = !purged && pending.length ? `<button class="btn" id="dl">הורדה לתיקייה (${pending.length})</button>` : '';
   const hist = [
@@ -995,7 +1032,10 @@ function fillDrawer(r, dr = $('.drawer')) {
       ${purged ? `<div class="note plain">הקבצים נמחקו מהענן ${PURGE_DAYS} ימים אחרי ההורדה. העותק נמצא בתיקייה במחשב.</div>` : ''}
       <div class="dlist">${DOCS.map(d => { const list = filesOf(r, d.key);
         return `<div class="ditem"><div class="dh">${esc(d.label)} ${d.req ? '' : '<span class="tag">רשות</span>'}
-          ${list.length ? '' : `<span class="miss ${d.req ? 'r' : ''}">${d.req ? 'חסר' : 'לא הועלה'}</span>`}</div>
+          ${list.length ? (open && !purged ? `<span class="rvb">
+            <button class="rv ok" data-rv="${d.key}" data-st="ok" aria-pressed="${rv[d.key] === 'ok'}">✓ תקין</button>
+            <button class="rv rep" data-rv="${d.key}" data-st="replace" aria-pressed="${rv[d.key] === 'replace'}">צריך להחליף</button></span>` : '')
+            : `<span class="miss ${d.req ? 'r' : ''}">${d.req ? 'חסר' : 'לא הועלה'}</span>`}</div>
           ${list.map(f => `<div class="frow"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
             <span class="sub">${fmtSize(f.size_bytes)} · ${fmtDate(f.uploaded_at)}</span>
             ${f.downloaded_at ? '<span class="in">בתיקייה ✓</span>' : '<span class="new">חדש</span>'}
@@ -1010,6 +1050,7 @@ function fillDrawer(r, dr = $('.drawer')) {
     try { const url = await API.viewUrl(f); if (w) w.location = url; else window.open(url, '_blank'); }
     catch { w && w.close(); toast('לא הצלחנו לפתוח את הקובץ'); }
   });
+  dr.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => doReview(r, b));
   const on = (id, fn) => { const b = dr.querySelector('#' + id); if (b) b.onclick = e => fn(r, e.currentTarget); };
   on('approve', doApprove); on('remind', doRemind); on('thanks', doThanks); on('dl', doDownload); on('del', doDelete); on('arch', doArchive);
 }
@@ -1023,8 +1064,11 @@ async function refresh(r) {
 
 /* ---------- messages Noa sends herself ---------- */
 function reminderText(r, wa) {
-  const b = s => wa ? `*${s}*` : s; const miss = missingReq(r);
-  return `שלום ${r.ref_name},\nתזכורת קטנה מ${b('עמותת שווים')}: עדיין חסרים מסמכי הקליטה של ${b(r.participant_name)}:\n${miss.map(k => '• ' + DOC[k].label).join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
+  const b = s => wa ? `*${s}*` : s; const miss = missingReq(r), rep = toReplace(r);
+  const parts = [];
+  if (miss.length) parts.push(`עדיין חסרים מסמכי הקליטה של ${b(r.participant_name)}:\n${miss.map(k => '• ' + DOC[k].label).join('\n')}`);
+  if (rep.length) parts.push(`${miss.length ? 'וגם צריך' : `צריך`} להחליף מסמכים של ${b(r.participant_name)}:\n${rep.map(k => '• ' + DOC[k].label).join('\n')}`);
+  return `שלום ${r.ref_name},\nתזכורת קטנה מ${b('עמותת שווים')}: ${parts.join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
 }
 function thanksText(r) {
   return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\n\n${CFG.noaName} · עמותת שווים`;
@@ -1068,11 +1112,24 @@ async function doApprove(r, btn) {
   busy(btn, true);
   try { await API.update(r.id, {status:'approved', approved_at:new Date().toISOString()}); }
   catch { busy(btn, false); return toast('האישור לא נשמר. נסי שוב.'); }
+  afterApproved(r);
+}
+async function afterApproved(r) {
   D.flashId = r.id; const nr = await refresh(r);
   toast(`הבקשה של ${r.participant_name} אושרה`);
   const go = await ask('לשלוח תודה לגורם המפנה?', `"תודה רבה, כל מסמכי הקליטה של ${esc(r.participant_name)} התקבלו."`,
     [{label:'כן, לשלוח', value:true, primary:true}, {label:'לא עכשיו', value:false, ghost:true}]);
   if (go) doThanks(nr || r);
+}
+// Noa's check of one document. Clicking the selected button again clears it.
+async function doReview(r, btn) {
+  const doc = btn.dataset.rv, state = btn.getAttribute('aria-pressed') === 'true' ? null : btn.dataset.st;
+  busy(btn, true);
+  let res;
+  try { res = await API.review(r.id, doc, state); }
+  catch { busy(btn, false); return toast('הסימון לא נשמר. נסי שוב.'); }
+  if (res.approved) return afterApproved(r);
+  await refresh(r);
 }
 async function doArchive(r, btn) {
   const out = !r.archived_at; busy(btn, true);
@@ -1092,58 +1149,32 @@ async function doDelete(r) {
 /* =====================================================================
    Download to the network folder (File System Access API)
    ===================================================================== */
-async function pickRoot() {
-  if (!('showDirectoryPicker' in window)) { toast('צריך Chrome או Edge במחשב'); return null; }
-  try {
-    const h = await window.showDirectoryPicker({id:'shavim-intake', mode:'readwrite'});
-    await idb.set('kv', 'root', h); toast(`נבחרה התיקייה: ${h.name}`); return h;
-  } catch (e) { if (e.name !== 'AbortError') toast('לא הצלחנו לבחור את התיקייה'); return null; }
-}
+// Noa picks the folder on every download; the picker opens on the folder she chose last time
 async function getRoot() {
-  let h = await idb.get('kv', 'root').catch(() => null);
-  if (!h) {
-    const go = await ask('בוחרים פעם אחת את תיקיית ההורדות',
-      `בחלון שייפתח, עוברים לתיקייה הזו ולוחצים "בחירת תיקייה":<div class="path">\\\\JAACOV\\Documents\\נועה\\טפסי קליטת מתמודד חדש</div>אם הדפדפן ישאל — מאשרים "עריכת קבצים".`,
-      [{label:'בחירת תיקייה', value:true, primary:true}, {label:'ביטול', value:false, ghost:true}]);
-    if (!go) return null;
-    h = await pickRoot(); if (!h) return null;
-  }
-  let perm = await h.queryPermission({mode:'readwrite'});
-  if (perm !== 'granted') perm = await h.requestPermission({mode:'readwrite'}).catch(() => 'denied');
-  if (perm !== 'granted') {
-    const again = await ask('אין הרשאה לתיקייה', 'הדפדפן צריך אישור לשמור קבצים בתיקייה. לנסות שוב?', [{label:'לאשר גישה', value:true, primary:true}, {label:'ביטול', value:false, ghost:true}]);
-    if (!again) return null;
-    perm = await h.requestPermission({mode:'readwrite'}).catch(() => 'denied');
-    if (perm !== 'granted') { toast('בלי הרשאה אי אפשר לשמור בתיקייה'); return null; }
-  }
-  return h;
+  const last = await idb.get('kv', 'root').catch(() => null);
+  try {
+    const h = await window.showDirectoryPicker({id:'shavim-intake', mode:'readwrite', ...(last ? {startIn: last} : {})});
+    await idb.set('kv', 'root', h).catch(() => {});
+    return h;
+  } catch (e) { if (e.name !== 'AbortError') toast('לא הצלחנו לפתוח את התיקייה. נסי שוב.'); return null; }
 }
+// The participant's existing folder is reused; otherwise "<name> - DD.MM.YYYY"
 async function findFolder(root, r) {
   if (r.folder_name) { try { return await root.getDirectoryHandle(r.folder_name); } catch {} }
-  const base = safeName(r.participant_name); const found = [];
-  for await (const [name, h] of root.entries()) if (h.kind === 'directory' && (name === base || name.startsWith(base + ' - '))) found.push(h);
-  if (found.length) {
-    let pick = 'cancel';
-    const choice = await new Promise(res => modal(`<h2>נמצאה תיקייה בשם הזה</h2><p>להוסיף את המסמכים לתיקייה קיימת, או לפתוח תיקייה חדשה?</p>
-      <div class="pick">${found.map((h, i) => `<button class="btn" data-k="${i}">הוספה אל: ${esc(h.name)}</button>`).join('')}
-      <button class="btn" data-k="new">תיקייה חדשה: ${esc(base)} - ${dotDate()}</button><button class="btn ghost" data-k="cancel">ביטול</button></div>`,
-      (el, close) => el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { pick = b.dataset.k; close(); }),
-      () => res(pick)));
-    if (choice === 'cancel' || choice == null) return null;
-    if (choice !== 'new') return found[+choice];
-  }
-  let name = `${base} - ${dotDate()}`, n = 2;
-  while (true) { try { await root.getDirectoryHandle(name); name = `${base} - ${dotDate()} (${n++})`; } catch { break; } }
-  return root.getDirectoryHandle(name, {create:true});
+  const base = safeName(r.participant_name);
+  for await (const [name, h] of root.entries()) if (h.kind === 'directory' && (name === base || name.startsWith(base + ' - '))) return h;
+  return root.getDirectoryHandle(`${base} - ${dotDate()}`, {create:true});
 }
-async function uniqueFile(dir, stem, ext) {
-  let name = `${stem}.${ext}`, n = 2;
-  while (true) { try { await dir.getFileHandle(name); name = `${stem} (${n++}).${ext}`; } catch { return dir.getFileHandle(name, {create:true}); } }
+// "<document> - <participant>.pdf"; a second file of the same document gets " (2)". Same name → overwritten.
+function fileStem(r, f) {
+  const same = (r.files || []).filter(x => x.doc_type === f.doc_type).sort((a, b) => String(a.uploaded_at).localeCompare(String(b.uploaded_at)));
+  const n = same.findIndex(x => x.id === f.id) + 1;
+  return safeName(`${DOC[f.doc_type].label} - ${r.participant_name}`) + (n > 1 ? ` (${n})` : '');
 }
 async function doDownload(r, btn) {
   if (!('showDirectoryPicker' in window)) return ask('צריך Chrome או Edge', 'ההורדה לתיקייה ברשת עובדת רק בדפדפן Chrome או Edge במחשב.', [{label:'הבנתי', value:true}]);
   const root = await getRoot(); if (!root) return;
-  const dir = await findFolder(root, r); if (!dir) return;
+  let dir; try { dir = await findFolder(root, r); } catch (e) { console.error(e); return toast('לא הצלחנו לכתוב בתיקייה הזו. נסי תיקייה אחרת.'); }
   const pending = (r.files || []).filter(f => !f.downloaded_at);
   busy(btn, true); const done = [];
   try {
@@ -1152,7 +1183,7 @@ async function doDownload(r, btn) {
       const blob = await API.blob(f);
       // extension from the stored file (checked by the server), never trusted from the uploaded name
       const ext = [extOf(f.storage_path), extOf(f.original_name)].find(x => EXT_MIME[x]) || 'pdf';
-      const fh = await uniqueFile(dir, safeName(`${DOC[f.doc_type].label} - ${r.participant_name}`), ext);
+      const fh = await dir.getFileHandle(`${fileStem(r, f)}.${ext}`, {create:true});
       const w = await fh.createWritable(); await w.write(blob); await w.close();
       done.push(f.id);
     }

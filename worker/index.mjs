@@ -13,6 +13,7 @@
 //   PATCH  /api/staff/requests/:id          whitelisted fields
 //   DELETE /api/staff/requests/:id
 //   POST   /api/staff/requests/:id/purge
+//   PUT    /api/staff/requests/:id/docs/:doc {state: 'ok'|'replace'|null}  Noa's check of one document
 //   PATCH  /api/staff/files                 {ids, downloaded_at}
 //   GET    /api/staff/files/:id             the file itself
 
@@ -38,7 +39,7 @@ async function sha256(s) { const d = await crypto.subtle.digest('SHA-256', new T
 async function sameSecret(a, b) { return safeEqual(await sha256(String(a)), await sha256(String(b))); }
 function safeEqual(a, b) { a = String(a); b = String(b); let diff = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return diff === 0; }
 
-const CORS = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization', 'Access-Control-Max-Age': '86400'};
+const CORS = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization', 'Access-Control-Max-Age': '86400'};
 const json = (body, status = 200) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...CORS}});
 async function readJson(req) { must(Number(req.headers.get('content-length') || 0) <= 100000, 'too_large', 413); try { return await req.json(); } catch { throw new HttpError(400, 'invalid_json'); } }
 
@@ -75,10 +76,15 @@ function sniff(bytes, ext) {
 
 /* ---------- request views ---------- */
 async function filesOf(db, requestId) { return all(db, 'SELECT * FROM files WHERE request_id=? ORDER BY uploaded_at', requestId); }
+async function reviewsOf(db, requestId) {
+  const rows = await all(db, 'SELECT doc_type, state FROM doc_reviews WHERE request_id=?', requestId);
+  return Object.fromEntries(rows.map(x => [x.doc_type, x.state]));
+}
 async function publicView(db, r) {
   const files = await filesOf(db, r.id);
+  const reviews = await reviewsOf(db, r.id);
   return {token: r.token, participant_name: r.participant_name, participant_id: r.participant_id, ref_name: r.ref_name, ref_email: r.ref_email, ref_phone: r.ref_phone,
-    status: r.status, created_at: r.created_at,
+    status: r.status, created_at: r.created_at, reviews,
     files: files.map(f => ({id: f.id, doc_type: f.doc_type, original_name: f.original_name, size_bytes: f.size_bytes, uploaded_at: f.uploaded_at, locked: !!f.downloaded_at}))};
 }
 async function byToken(db, token, open = true) {
@@ -134,13 +140,17 @@ async function intakeUpload(env, req, token) {
     await q(db, 'INSERT INTO files(id,request_id,doc_type,original_name,kv_key,size_bytes,mime,uploaded_at) VALUES (?,?,?,?,?,?,?,?)', id, r.id, docType, name, key, buf.byteLength, mime, now()).run();
   } catch (e) { await env.FILES.delete(key).catch(() => {}); throw e; }   // no orphan document left in KV
   await q(db, 'UPDATE requests SET updated_at=?, fully_downloaded_at=NULL WHERE id=?', now(), r.id).run();
+  await q(db, 'DELETE FROM doc_reviews WHERE request_id=? AND doc_type=?', r.id, docType).run();   // new file → Noa checks again
   return json(await publicView(db, await one(db, 'SELECT * FROM requests WHERE id=?', r.id)), 201);
 }
 async function intakeRemove(env, token, fileId) {
   const db = env.DB; const r = await byToken(db, token);
   const f = await one(db, 'SELECT * FROM files WHERE id=? AND request_id=? AND downloaded_at IS NULL', fileId, r.id);
   // KV first: if that fails the row stays, so the removal can simply be retried
-  if (f) { await env.FILES.delete(f.kv_key); await q(db, 'DELETE FROM files WHERE id=?', f.id).run(); }
+  if (f) {
+    await env.FILES.delete(f.kv_key); await q(db, 'DELETE FROM files WHERE id=?', f.id).run();
+    await q(db, 'DELETE FROM doc_reviews WHERE request_id=? AND doc_type=?', r.id, f.doc_type).run();
+  }
   await q(db, 'UPDATE requests SET updated_at=? WHERE id=?', now(), r.id).run();
   return json(await publicView(db, r));
 }
@@ -181,8 +191,10 @@ async function listRequests(env) {
   const db = env.DB;
   const reqs = await all(db, 'SELECT * FROM requests ORDER BY created_at DESC');
   const files = await all(db, 'SELECT id,request_id,doc_type,original_name,size_bytes,mime,uploaded_at,downloaded_at FROM files ORDER BY uploaded_at');
-  const by = {}; files.forEach(f => (by[f.request_id] ||= []).push(f));
-  return json(reqs.map(r => ({...r, possible_duplicate: !!r.possible_duplicate, files: by[r.id] || []})));
+  const revs = await all(db, 'SELECT request_id, doc_type, state FROM doc_reviews');
+  const by = {}, rv = {}; files.forEach(f => (by[f.request_id] ||= []).push(f));
+  revs.forEach(x => (rv[x.request_id] ||= {})[x.doc_type] = x.state);
+  return json(reqs.map(r => ({...r, possible_duplicate: !!r.possible_duplicate, files: by[r.id] || [], reviews: rv[r.id] || {}})));
 }
 async function patchRequest(env, req, id) {
   const body = await readJson(req); const sets = [], vals = [];
@@ -206,6 +218,26 @@ async function patchRequest(env, req, id) {
   must(res.meta.changes, 'not_found', 404);
   return json({ok: true});
 }
+// Noa marks one document type. When every required document is 'ok', the request is approved.
+async function reviewDoc(env, req, id, docType) {
+  const db = env.DB; const body = await readJson(req);
+  must(DOC_TYPES.includes(docType), 'bad_doc_type');
+  must(body.state === null || body.state === 'ok' || body.state === 'replace', 'bad_value');
+  const r = await one(db, 'SELECT * FROM requests WHERE id=?', id);
+  must(r, 'not_found', 404);
+  must(r.status !== 'approved', 'closed', 409);
+  must(body.state === null || (await one(db, 'SELECT 1 AS x FROM files WHERE request_id=? AND doc_type=?', id, docType)), 'no_file', 409);
+  if (body.state === null) await q(db, 'DELETE FROM doc_reviews WHERE request_id=? AND doc_type=?', id, docType).run();
+  else await q(db, 'INSERT INTO doc_reviews(request_id,doc_type,state,at) VALUES (?,?,?,?) ON CONFLICT(request_id,doc_type) DO UPDATE SET state=excluded.state, at=excluded.at',
+    id, docType, body.state, now()).run();
+  const rv = await reviewsOf(db, id);
+  const approved = REQUIRED.every(k => rv[k] === 'ok');
+  if (approved) {
+    const t = now();
+    await q(db, "UPDATE requests SET status='approved', approved_at=?, submitted_at=COALESCE(submitted_at, ?), updated_at=? WHERE id=?", t, t, t, id).run();
+  } else await q(db, 'UPDATE requests SET updated_at=? WHERE id=?', now(), id).run();
+  return json({ok: true, approved, reviews: rv});
+}
 async function purgeRequest(env, id) {
   const r = await one(env.DB, 'SELECT status, fully_downloaded_at FROM requests WHERE id=?', id);
   must(r, 'not_found', 404);
@@ -217,7 +249,7 @@ async function purgeRequest(env, id) {
 async function deleteRequest(env, id) {
   const files = await all(env.DB, 'SELECT kv_key FROM files WHERE request_id=?', id);
   for (const f of files) await env.FILES.delete(f.kv_key);
-  await env.DB.batch([q(env.DB, 'DELETE FROM files WHERE request_id=?', id), q(env.DB, 'DELETE FROM requests WHERE id=?', id)]);
+  await env.DB.batch([q(env.DB, 'DELETE FROM doc_reviews WHERE request_id=?', id), q(env.DB, 'DELETE FROM files WHERE request_id=?', id), q(env.DB, 'DELETE FROM requests WHERE id=?', id)]);
   return json({ok: true});
 }
 async function patchFiles(env, req) {
@@ -272,6 +304,7 @@ async function route(req, env) {
     if (p === '/api/staff/requests' && m === 'GET') return listRequests(env);
     if ((x = p.match(/^\/api\/staff\/requests\/([\w-]+)$/)) && m === 'PATCH') return patchRequest(env, req, x[1]);
     if ((x = p.match(/^\/api\/staff\/requests\/([\w-]+)$/)) && m === 'DELETE') return deleteRequest(env, x[1]);
+    if ((x = p.match(/^\/api\/staff\/requests\/([\w-]+)\/docs\/([a-z]+)$/)) && m === 'PUT') return reviewDoc(env, req, x[1], x[2]);
     if ((x = p.match(/^\/api\/staff\/requests\/([\w-]+)\/purge$/)) && m === 'POST') { await purgeRequest(env, x[1]); return json({ok: true}); }
     if (p === '/api/staff/files' && m === 'PATCH') return patchFiles(env, req);
     if ((x = p.match(/^\/api\/staff\/files\/([\w-]+)$/)) && m === 'GET') return getFile(env, x[1]);
