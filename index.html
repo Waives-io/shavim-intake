@@ -393,9 +393,9 @@ function docsTableHtml(r) {
     return `<li>${n ? '✅' : (d.req ? '❌' : '➖')} ${esc(d.label)}${d.req ? '' : ' (רשות)'}${n > 1 ? ` · ${n} קבצים` : ''}</li>`;
   }).join('') + '</ul>';
 }
-function mailToNoa(r, kind) {
+function mailToNoa(r) {   // only when documents are sent (not on partial saves)
   const miss = missingReq(r);
-  const head = kind === 'submit' ? (r.status === 'submitted' && r._resend ? 'נוספו מסמכים' : 'נשלחו כל מסמכי החובה') : 'נשמר חלקית';
+  const head = r._resend ? 'נוספו מסמכים' : 'נשלחו כל מסמכי החובה';
   const subject = `קליטת מתמודד: ${r.participant_name} – ${head}`;
   const html = `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;line-height:1.6">
     <p><b>${esc(r.participant_name)}</b> · ת"ז ${esc(r.participant_id)}</p>
@@ -617,7 +617,7 @@ function ask(title, text, buttons) {
 /* =====================================================================
    REFERRER FORM
    ===================================================================== */
-const F = {token:null, req:null, saved:null, activeDoc:null, refMailedTo:null, pending:{}};   // pending: files waiting for the details
+const F = {token:null, req:null, saved:null, activeDoc:null, pending:{}};   // pending: files waiting for the details
 const FIELDS = [
   {id:'participant_name', label:'שם מלא של המתמודד', group:1, auto:'off'},
   {id:'participant_id', label:'מספר ת"ז של המתמודד', group:1, ltr:true, mode:'numeric', max:9, hint:'9 ספרות, כולל ספרת ביקורת'},
@@ -689,7 +689,6 @@ async function startForm(token) {
     try { F.req = await API.get(token); F.token = token; }
     catch (e) { return renderNotFound(); }
     if (F.req.status === 'approved') return renderClosed();
-    F.refMailedTo = F.req.ref_email; F.refMail = Promise.resolve(true);  // they already hold the link
   }
   renderForm();
 }
@@ -802,11 +801,6 @@ async function ensureSaved() {
   const res = await API.save(F.token, d);
   F.req = res; F.token = res.token; F.saved = d;
   history.replaceState(null, '', `${BASE_URL}?r=${res.token}`);
-  // link email goes out in the background; a failure is retried and reported on the end screen
-  if (F.refMailedTo !== d.ref_email) {
-    F.refMailedTo = d.ref_email;
-    F.refMail = mailToReferrer(res).then(ok => { if (!ok) F.refMailedTo = null; return ok; });
-  }
   return true;
 }
 // Upload files that were added before the details were filled in
@@ -822,12 +816,6 @@ async function flushPending() {
     return true;
   } catch (e) { console.error(e); toast('ההעלאה לא הצליחה. בדקו את החיבור ונסו שוב.'); return false; }
   finally { F.flushing = false; }
-}
-async function referrerMailOk() {
-  if (F.refMail && await F.refMail) return true;
-  const ok = await mailToReferrer(F.req);
-  if (ok) { F.refMailedTo = F.req.ref_email; F.refMail = Promise.resolve(true); }
-  return ok;
 }
 async function handleFiles(key, files) {
   const box = $(`.doc[data-doc="${key}"]`), err = box.querySelector('.doc-err');
@@ -864,7 +852,7 @@ async function onSend(e) {
     const wasSubmitted = F.req.status === 'submitted';
     F.req = await API.submit(F.token);
     // Noa sees the request in the dashboard even if her email fails
-    const [mailOk] = await Promise.all([mailToReferrerDone(F.req), mailToNoa({...F.req, _resend: wasSubmitted}, 'submit')]);
+    const [mailOk] = await Promise.all([mailToReferrerDone(F.req), mailToNoa({...F.req, _resend: wasSubmitted})]);
     renderThanks(mailOk);
   } catch (err) { console.error(err); busy(btn, false); toast('השליחה לא הצליחה. כל מה שהעליתם נשמר — נסו שוב.'); }
 }
@@ -872,7 +860,8 @@ async function onLater(e) {
   const btn = e.currentTarget; busy(btn, true);
   try {
     if (!(await ensureSaved()) || !(await flushPending())) { busy(btn, false); return; }
-    const [mailOk] = await Promise.all([referrerMailOk(), mailToNoa(F.req, 'partial')]);
+    // the link email is sent now, so its document list is up to date; Noa is emailed only when documents are sent
+    const mailOk = await mailToReferrer(F.req);
     renderSaved(mailOk);
   } catch (err) { console.error(err); busy(btn, false); toast('השמירה לא הצליחה. נסו שוב.'); }
 }
