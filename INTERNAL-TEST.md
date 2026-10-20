@@ -2,7 +2,7 @@
 
 כתובות:
 - טופס: https://waives-io.github.io/shavim-intake/
-- דשבורד: https://waives-io.github.io/shavim-intake/?noa (מייל `noa@amutatshavim.co.il` + סיסמת הבדיקה שלך)
+- דשבורד: https://waives-io.github.io/shavim-intake/?noa (מייל `shavim.holon@gmail.com` + סיסמת הבדיקה שלך)
 
 המיילים האוטומטיים עוד לא מחוברים (EmailJS). לכן במסכי הסיום תופיע ההודעה "לא הצלחנו לשלוח את הלינק במייל". זה תקין בשלב הזה.
 

@@ -5,7 +5,7 @@
 import fs from 'fs';
 const BASE = process.env.API || 'http://127.0.0.1:8787';
 const PASS = (fs.readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8').match(/^STAFF_PASSWORD=(.*)$/m) || [])[1]?.trim();
-const EMAIL = 'noa@amutatshavim.co.il';
+const EMAIL = 'shavim.holon@gmail.com';
 
 let pass = 0, fail = 0;
 const check = (name, ok, extra = '') => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + name + (extra ? ' — ' + extra : '')); };

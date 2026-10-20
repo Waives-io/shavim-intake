@@ -14,7 +14,7 @@
   // Daily: delete files from the cloud after download, clean old sessions.
   "triggers": { "crons": ["15 2 * * *"] },
   "vars": {
-    "STAFF_EMAIL": "noa@amutatshavim.co.il",
+    "STAFF_EMAIL": "shavim.holon@gmail.com",
     "PURGE_DAYS": "14"
   }
   // Secret (set with: npx wrangler secret put STAFF_PASSWORD): Noa's dashboard password.
