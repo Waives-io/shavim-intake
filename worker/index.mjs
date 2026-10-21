@@ -3,7 +3,7 @@
 // Referrer (anonymous) — only through the secret request token:
 //   POST   /api/intake                      {token|null, details}  create / update details
 //   GET    /api/intake/:token
-//   POST   /api/intake/:token/files         multipart: doc_type, file
+//   POST   /api/intake/:token/files         multipart: doc_type, file, replace=1 (the new file replaces the current one)
 //   DELETE /api/intake/:token/files/:id     only before Noa downloaded it
 //   POST   /api/intake/:token/submit
 // Staff (Bearer session token):
@@ -126,7 +126,7 @@ async function intakeUpload(env, req, token) {
   const n = await one(db, 'SELECT COUNT(*) AS n FROM files WHERE request_id=?', r.id);
   must(n.n < MAX_FILES_PER_REQUEST, 'too_many_files', 409);
   let form; try { form = await req.formData(); } catch { throw new HttpError(400, 'invalid_form'); }
-  const docType = String(form.get('doc_type') || ''); const file = form.get('file');
+  const docType = String(form.get('doc_type') || ''); const file = form.get('file'); const replace = form.get('replace') === '1';
   must(DOC_TYPES.includes(docType), 'bad_doc_type');
   must(file && typeof file === 'object' && typeof file.arrayBuffer === 'function', 'no_file');
   const name = String(file.name || 'file').slice(0, 200);
@@ -142,12 +142,11 @@ async function intakeUpload(env, req, token) {
     await q(db, 'INSERT INTO files(id,request_id,doc_type,original_name,kv_key,size_bytes,mime,uploaded_at) VALUES (?,?,?,?,?,?,?,?)', id, r.id, docType, name, key, buf.byteLength, mime, now()).run();
   } catch (e) { await env.FILES.delete(key).catch(() => {}); throw e; }   // no orphan document left in KV
   await q(db, 'UPDATE requests SET updated_at=?, fully_downloaded_at=NULL WHERE id=?', now(), r.id).run();
-  if (prev) {   // Noa had reviewed this document: the new file waits for her check
-    const t = now();
-    if (prev.state === 'replace')   // the earlier file(s) are replaced: kept for history, no longer counted
-      await q(db, 'UPDATE files SET replaced_at=? WHERE request_id=? AND doc_type=? AND id<>? AND replaced_at IS NULL', t, r.id, docType, id).run();
+  const t = now();
+  if (replace || (prev && prev.state === 'replace'))   // the earlier file(s) are replaced: kept for history, no longer counted
+    await q(db, 'UPDATE files SET replaced_at=? WHERE request_id=? AND doc_type=? AND id<>? AND replaced_at IS NULL', t, r.id, docType, id).run();
+  if (prev)   // Noa had reviewed this document: the new file waits for her check
     await q(db, "UPDATE doc_reviews SET state='check', at=? WHERE request_id=? AND doc_type=?", t, r.id, docType).run();
-  }
   return json(await publicView(db, await one(db, 'SELECT * FROM requests WHERE id=?', r.id)), 201);
 }
 async function intakeRemove(env, token, fileId) {

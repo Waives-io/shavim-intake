@@ -130,6 +130,12 @@ async def main():
         await page.goto(token_url)
         await page.wait_for_selector('.doc[data-doc=committee].has')
         check('returning link restores details', await page.input_value('#participant_name') == 'שגיא רון')
+        async with page.expect_file_chooser() as fc:
+            await page.click('.doc[data-doc=committee] [data-repl]')
+        await (await fc.value).set_files(f'{FIX}/vaada.pdf')
+        await page.wait_for_selector('.doc[data-doc=committee] li.old')
+        n_cur = await page.eval_on_selector_all('.doc[data-doc=committee] li:not(.old)', 'e => e.length')
+        check('"קובץ להחלפה": old file marked replaced, one current file', n_cur == 1, str(n_cur))
         await page.set_input_files('#in-social', f'{FIX}/social.pdf')
         await page.wait_for_selector('.doc[data-doc=social].has')
         check('send enabled when all required in', not await page.is_disabled('#send'))
@@ -208,7 +214,7 @@ async def main():
         check('WhatsApp opens to referrer number with text', bool(op) and str(op[-1]).startswith('https://wa.me/972539876543?text='), str(op)[:90])
         await page.wait_for_timeout(400)
         hist = await page.text_content('.drawer .hist')
-        check('reminder date recorded', 'תזכורת אחרונה' in hist, hist)
+        check('update-request date recorded', 'בקשה לעדכון אחרונה' in hist, hist)
         await page.click('#back')
 
         # per-document review on a submitted request
@@ -223,7 +229,7 @@ async def main():
         await page.click('.modal [data-close]')
         tok = await page.evaluate("JSON.parse(localStorage.getItem('shavim-demo-v1')).requests.find(r => r.participant_name === 'נועם בר').token")
         rp = await ctx.new_page(); await rp.goto(BASE + '?r=' + tok); await rp.wait_for_selector('.doc[data-doc=psychiatric]')
-        check('referrer sees "צריך להחליף" on that document', await rp.query_selector('.doc[data-doc=psychiatric] .tag.rep') is not None)
+        check('referrer sees "נדרש להחליף מסמך" (no green ✓)', 'נדרש להחליף מסמך' in await rp.text_content('.doc[data-doc=psychiatric] .doc-state'))
         await rp.set_input_files('#in-psychiatric', f'{FIX}/psych.pdf')
         await rp.wait_for_selector('.doc[data-doc=psychiatric] li.old')
         check('referrer: old file shown as "הוחלף"', 'הוחלף' in await rp.text_content('.doc[data-doc=psychiatric] li.old'))

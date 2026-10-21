@@ -18,8 +18,8 @@ async function api(path, {method = 'GET', json, body, auth} = {}) {
   return {status: res.status, headers: res.headers, data: type.includes('json') ? await res.json() : new Uint8Array(await res.arrayBuffer())};
 }
 const PDF = new TextEncoder().encode('%PDF-1.4 test document');
-function upload(token, doc, bytes, name) {
-  const fd = new FormData(); fd.append('doc_type', doc); fd.append('file', new Blob([bytes]), name);
+function upload(token, doc, bytes, name, replace) {
+  const fd = new FormData(); fd.append('doc_type', doc); fd.append('file', new Blob([bytes]), name); if (replace) fd.append('replace', '1');
   return api(`/api/intake/${token}/files`, {method: 'POST', body: fd});
 }
 const D = {participant_name: 'דנה כהן', participant_id: '034567891', ref_name: 'שירה אדלר', ref_email: 'shira@example.co.il', ref_phone: '052-1234567'};
@@ -47,6 +47,9 @@ check('upload real PDF', r.status === 201 && r.data.files.length === 1 && r.data
 r = await api(`/api/intake/${T}/submit`, {method: 'POST'});
 check('submit blocked while required docs missing → 409', r.status === 409 && r.data.error === 'missing_required');
 await upload(T, 'psychiatric', PDF, 'psych.pdf');
+r = await upload(T, 'psychiatric', PDF, 'psych-v2.pdf', true);
+const ps = r.data.files.filter(f => f.doc_type === 'psychiatric');
+check('"replace" upload marks the earlier file replaced', ps.length === 2 && ps.find(f => f.original_name === 'psych.pdf').replaced && !ps.find(f => f.original_name === 'psych-v2.pdf').replaced);
 r = await upload(T, 'idcard', PDF, 'tz.pdf');
 const idcard = r.data.files.find(f => f.doc_type === 'idcard').id;
 r = await api(`/api/intake/${T}/files/${idcard}`, {method: 'DELETE'});

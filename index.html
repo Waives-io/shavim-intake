@@ -216,12 +216,15 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .ditem .dh{display:flex;align-items:center;gap:8px;font-weight:700}
 .ditem .dh .miss{margin-inline-start:auto;font-size:13px;color:var(--muted);font-weight:600}
 .ditem .dh .miss.r{color:var(--orange)}
-.rvb{display:flex;gap:6px;margin-inline-start:auto}
-.rv{border:1.5px solid var(--line);background:var(--bg);border-radius:999px;padding:2px 12px;font-size:14px;font-weight:600;cursor:pointer;min-height:32px;color:var(--ink)}
-.rv:hover{border-color:var(--ink)}
-.rv.ok[aria-pressed=true]{border:2px solid var(--green);font-weight:800}
-.rv.rep[aria-pressed=true]{border:2px solid var(--orange);font-weight:800}
-.tag.rep{border:2px solid var(--orange);color:var(--ink);font-weight:700}
+.sw{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
+.sw-o{background:none;border:0;padding:4px 2px;cursor:pointer;font-size:14px;font-weight:500;color:var(--muted)}
+.sw-o[aria-checked=true]{font-weight:800;color:var(--ink)}
+.sw-t{position:relative;width:52px;height:28px;border-radius:999px;border:0;background:var(--line);cursor:pointer;flex:none;transition:background-color .15s var(--ease)}
+.sw-t::after{content:"";position:absolute;top:4px;right:16px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:right .15s var(--ease)}
+.sw-t.ok{background:var(--green)} .sw-t.ok::after{right:4px}
+.sw-t.replace{background:var(--orange)} .sw-t.replace::after{right:28px}
+.doc.need{border-style:solid;border-color:var(--orange)}
+.st-rep{color:var(--ink);font-weight:800;border:2px solid var(--orange);border-radius:999px;padding:1px 10px}
 .frow{display:flex;align-items:center;gap:10px;font-size:14px;margin-top:6px;flex-wrap:wrap}
 .frow .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
 .frow .in{font-size:13px;font-weight:600}
@@ -469,8 +472,8 @@ async function call(path, {method = 'GET', json, body, staff = false, raw = fals
 const LiveAPI = {
   get: token => call(`/api/intake/${token}`),
   save: (token, details) => call('/api/intake', {method:'POST', json:{token, details}}),
-  upload(token, doc, file) {
-    const fd = new FormData(); fd.append('doc_type', doc); fd.append('file', file, uploadName(file));
+  upload(token, doc, file, replace) {
+    const fd = new FormData(); fd.append('doc_type', doc); fd.append('file', file, uploadName(file)); if (replace) fd.append('replace', '1');
     return call(`/api/intake/${token}/files`, {method:'POST', body: fd});
   },
   remove: (token, fileId) => call(`/api/intake/${token}/files/${fileId}`, {method:'DELETE'}),
@@ -514,11 +517,11 @@ const DemoAPI = {
     Object.assign(r, p, {updated_at: now}); Demo.store(db);
     return {...Demo.pub(r), merged:false};
   },
-  async upload(token, doc, file) {
+  async upload(token, doc, file, replace) {
     const db = Demo.db(); const r = Demo.open(db, token); const id = uid();
     await idb.set('blobs', id, file);
     const prev = (r.reviews || {})[doc], t = new Date().toISOString();
-    if (prev === 'replace') r.files.forEach(f => { if (f.doc_type === doc && !f.replaced_at) f.replaced_at = t; });
+    if (replace || prev === 'replace') r.files.forEach(f => { if (f.doc_type === doc && !f.replaced_at) f.replaced_at = t; });
     if (prev) r.reviews[doc] = 'check';   // Noa had reviewed it: the new file waits for her check
     r.files.push({id, doc_type:doc, original_name:file.name, size_bytes:file.size, mime:fileMime(file), uploaded_at:t, downloaded_at:null, storage_path:id});
     r.fully_downloaded_at = null; r.updated_at = new Date().toISOString(); Demo.store(db); return Demo.pub(r);
@@ -762,18 +765,21 @@ function renderForm() {
 function renderDocs() {
   const r = F.req || {files:[]};
   $('#docs').innerHTML = DOCS.map(d => {
-    const fs = filesOf(r, d.key), pend = F.pending[d.key] || [];
-    return `<div class="doc ${fs.length ? 'has' : ''}" data-doc="${d.key}" tabindex="-1">
+    const fs = filesOf(r, d.key), pend = F.pending[d.key] || [], st = (r.reviews || {})[d.key];
+    return `<div class="doc ${st === 'replace' ? 'need' : fs.length ? 'has' : ''}" data-doc="${d.key}" tabindex="-1">
       <div class="doc-head"><span class="doc-name">${esc(d.label)}</span>
         <span class="tag ${d.req ? 'req' : ''}">${d.req ? 'חובה' : 'רשות'}</span>
-        ${(r.reviews || {})[d.key] === 'replace' ? '<span class="tag rep">צריך להחליף — מעלים קובץ חדש</span>' : ''}
-        <span class="doc-state">${fs.length ? `<span class="ok-dot">${ICON_CHECK}</span>הועלה` : pend.length ? 'ממתין לפרטים' : (d.req ? 'חסר' : '')}</span></div>
+        <span class="doc-state">${!fs.length ? (pend.length ? 'ממתין לפרטים' : d.req ? 'חסר' : '')
+          : st === 'replace' ? '<span class="st-rep">נדרש להחליף מסמך</span>'
+          : st === 'ok' ? `<span class="ok-dot">${ICON_CHECK}</span>אושר`
+          : `<span class="ok-dot">${ICON_CHECK}</span>הועלה`}</span></div>
       ${allFilesOf(r, d.key).length || pend.length ? `<ul class="doc-files">${pend.map((f, i) => `<li><span class="fname" title="${esc(f.name)}"><bdi>${esc(f.name)}</bdi></span>
         <span class="fmeta">${fmtSize(f.size)} · יועלה אחרי מילוי הפרטים</span>
         <button type="button" class="linkbtn x" data-rmp="${d.key}:${i}" aria-label="הסרת ${esc(f.name)}">הסרה</button></li>`).join('')}${allFilesOf(r, d.key).map(f => `<li class="${isOld(f) ? 'old' : ''}"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
         <span class="fmeta">${fmtSize(f.size_bytes)}</span>
         ${isOld(f) ? '<span class="fmeta x">הוחלף</span>' : f.locked ? '<span class="fmeta x">התקבל</span>' : `<button type="button" class="linkbtn x" data-rm="${f.id}" aria-label="הסרת ${esc(f.original_name)}">הסרה</button>`}</li>`).join('')}</ul>` : ''}
       <div class="doc-actions">
+        ${fs.length ? `<button type="button" class="btn small" data-repl="${d.key}">קובץ להחלפה</button>` : ''}
         <button type="button" class="btn small" data-pick="${d.key}">${fs.length ? '+ קובץ נוסף' : '+ העלאת קובץ'}</button>
         <span class="drop-hint">או גוררים קובץ לכאן</span>
         <input type="file" class="sr" id="in-${d.key}" accept="${ACCEPT}" multiple tabindex="-1" aria-label="${esc(d.label)}">
@@ -781,8 +787,9 @@ function renderDocs() {
   }).join('');
   $$('.doc').forEach(box => {
     const key = box.dataset.doc, input = $('#in-' + key);
-    box.querySelector('[data-pick]').onclick = () => { F.activeDoc = key; input.click(); };
-    input.onchange = () => { handleFiles(key, [...input.files]); input.value = ''; };
+    box.querySelector('[data-pick]').onclick = () => { F.activeDoc = key; F.replaceMode = false; input.click(); };
+    const rb = box.querySelector('[data-repl]'); if (rb) rb.onclick = () => { F.activeDoc = key; F.replaceMode = true; input.click(); };
+    input.onchange = () => { handleFiles(key, [...input.files], F.replaceMode); F.replaceMode = false; input.value = ''; };
     box.addEventListener('pointerenter', () => F.activeDoc = key);
     box.addEventListener('dragover', e => { e.preventDefault(); box.classList.add('drag'); });
     box.addEventListener('dragleave', () => box.classList.remove('drag'));
@@ -803,7 +810,8 @@ function renderBar() {
   $('#bar').innerHTML = `
     <button type="button" class="btn primary" id="send" ${miss.length ? 'disabled aria-disabled="true"' : ''}>${resend ? 'שליחת העדכון' : 'שליחת המסמכים'}</button>
     ${resend ? '' : `<button type="button" class="btn" id="later">שמירה והשלמה אחר כך</button>`}
-    <span class="missing">${miss.length ? 'חסרים מסמכי חובה: ' + miss.map(k => DOC[k].label).join(' · ') : 'כל מסמכי החובה הועלו ✓'}</span>`;
+    <span class="missing">${miss.length ? 'חסרים מסמכי חובה: ' + miss.map(k => DOC[k].label).join(' · ')
+      : r && toReplace(r).length ? 'נדרש להחליף: ' + toReplace(r).map(k => DOC[k].label).join(' · ') : 'כל מסמכי החובה הועלו ✓'}</span>`;
   $('#send').onclick = onSend;
   const l = $('#later'); if (l) l.onclick = onLater;
 }
@@ -835,7 +843,7 @@ async function flushPending() {
   } catch (e) { console.error(e); toast('ההעלאה לא הצליחה. בדקו את החיבור ונסו שוב.'); return false; }
   finally { F.flushing = false; }
 }
-async function handleFiles(key, files) {
+async function handleFiles(key, files, replace = false) {
   const box = $(`.doc[data-doc="${key}"]`), err = box.querySelector('.doc-err');
   err.textContent = ''; box.classList.remove('bad');
   if (!files.length) return;
@@ -854,7 +862,7 @@ async function handleFiles(key, files) {
     if (!(await ensureSaved())) { busy(pick, false); return; }
     for (let i = 0; i < files.length; i++) {
       pick.textContent = files.length > 1 ? `מעלה ${i+1} מתוך ${files.length}…` : 'מעלה…';
-      F.req = await API.upload(F.token, key, files[i]);
+      F.req = await API.upload(F.token, key, files[i], replace && i === 0);   // "קובץ להחלפה": the first file replaces the current one
     }
     if (wasReplace) mailToNoaReplaced(F.req, key);   // Noa hears about it even if "שליחת העדכון" isn't clicked
     renderDocs(); renderBar();
@@ -1050,7 +1058,7 @@ function renderRows() {
     const got = REQUIRED.filter(k => filesOf(r, k).length).length;
     const label = `${r.participant_name}, ת"ז ${r.participant_id}. גורם מפנה: ${r.ref_name}. ` +
       `מסמכי חובה: ${got} מתוך ${REQUIRED.length}. נפתח: ${fmtDate(r.created_at)}. סטטוס: ${STATUS[r.status].label}${late ? `, ממתין ${daysSince(r.created_at)} ימים` : ''}.`;
-    const act = late ? `<br><button class="btn small rowact" data-act="remind" data-id="${r.id}">שליחת תזכורת</button>`
+    const act = late ? `<br><button class="btn small rowact" data-act="remind" data-id="${r.id}">בקשה לעדכון</button>`
       : r.status === 'approved' && !r.archived_at ? `<br><button class="btn small rowact" data-act="arch" data-id="${r.id}">העברה לארכיון</button>` : '';
     return `<div class="lrow ${D.flashId === r.id ? 'flash' : ''}" data-id="${r.id}" role="button" tabindex="0" aria-label="${esc(label)}">
       <span class="c-n"><span class="pname">${esc(r.participant_name)}</span><br><span class="sub ltr">${esc(r.participant_id)}</span></span>
@@ -1095,14 +1103,14 @@ function fillDrawer(r, dr = $('.drawer')) {
   let primary = '', why = '';
   if (r.status === 'submitted' && !rep.length) primary = `<button class="btn primary" id="approve">אישור קבלת המסמכים</button>`;
   else if (open) {
-    primary = `<button class="btn primary" id="remind">שליחת תזכורת</button>`;
+    primary = `<button class="btn primary" id="remind">שליחת בקשה לעדכון</button>`;
     why = rep.length ? `סומנו להחלפה: ${rep.map(k => DOC[k].label).join(' · ')}.` : `אפשר לאשר אחרי שיגיעו כל מסמכי החובה (חסרים ${miss.length}).`;
   }
   else if (!r.thanks_sent_at) primary = `<button class="btn primary" id="thanks">שליחת תודה לגורם המפנה</button>`;
   const dl = !purged && pending.length ? `<button class="btn" id="dl">הורדה לתיקייה (${pending.length})</button>` : '';
   const arch = r.status === 'approved' ? `<button class="btn" id="arch">${r.archived_at ? 'החזרה מהארכיון' : 'העברה לארכיון'}</button>` : '';
   const hist = [
-    ['נפתח', r.created_at], ['נשלח', r.submitted_at], ['תזכורת אחרונה', r.last_reminder_at], ['אושר', r.approved_at],
+    ['נפתח', r.created_at], ['נשלח', r.submitted_at], ['בקשה לעדכון אחרונה', r.last_reminder_at], ['אושר', r.approved_at],
     ['תודה נשלחה', r.thanks_sent_at], ['הורדה אחרונה', r.last_download_at], ['נמחק מהענן', r.purged_at]].filter(x => x[1]).map(x => `${x[0]}: ${fmtDate(x[1])}`).join(' · ');
   dr.innerHTML = `<div class="dr-top"><button class="btn ghost small" id="back">→ חזרה לכל הבקשות</button></div>
     <div class="dr-body">
@@ -1120,9 +1128,10 @@ function fillDrawer(r, dr = $('.drawer')) {
       ${purged ? `<div class="note plain">הקבצים נמחקו מהענן ${PURGE_DAYS} ימים אחרי ההורדה. העותק נמצא בתיקייה במחשב.</div>` : ''}
       <div class="dlist">${DOCS.map(d => { const list = allFilesOf(r, d.key), cur = filesOf(r, d.key);
         return `<div class="ditem"><div class="dh">${esc(d.label)} ${d.req ? '' : '<span class="tag">רשות</span>'}
-          ${cur.length ? (open && !purged ? `<span class="rvb">
-            <button class="rv ok" data-rv="${d.key}" data-st="ok" aria-pressed="${rv[d.key] === 'ok'}">✓ תקין</button>
-            <button class="rv rep" data-rv="${d.key}" data-st="replace" aria-pressed="${rv[d.key] === 'replace'}">צריך להחליף</button></span>` : '')
+          ${cur.length ? (open && !purged ? `<span class="sw" role="radiogroup" aria-label="בדיקת ${esc(d.label)}">
+            <button class="sw-o" role="radio" data-rv="${d.key}" data-st="ok" aria-checked="${rv[d.key] === 'ok'}">תקין</button>
+            <button class="sw-t ${rv[d.key] === 'ok' || rv[d.key] === 'replace' ? rv[d.key] : ''}" data-rv="${d.key}" data-st="${rv[d.key] === 'ok' ? 'replace' : 'ok'}" aria-label="החלפת מצב: ${esc(d.label)}"></button>
+            <button class="sw-o" role="radio" data-rv="${d.key}" data-st="replace" aria-checked="${rv[d.key] === 'replace'}">נדרש להחליף</button></span>` : '')
             : `<span class="miss ${d.req ? 'r' : ''}">${d.req ? 'חסר' : 'לא הועלה'}</span>`}</div>
           ${list.map(f => `<div class="frow ${isOld(f) ? 'old' : ''}"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
             <span class="sub">${fmtSize(f.size_bytes)} · ${fmtDate(f.uploaded_at)}</span>
@@ -1158,7 +1167,7 @@ function reminderText(r, wa) {
   const parts = [];
   if (miss.length) parts.push(`עדיין חסרים מסמכי הקליטה של ${b(r.participant_name)}:\n${miss.map(k => '• ' + DOC[k].label).join('\n')}`);
   if (rep.length) parts.push(`${miss.length ? 'וגם צריך' : `צריך`} להחליף מסמכים של ${b(r.participant_name)}:\n${rep.map(k => '• ' + DOC[k].label).join('\n')}`);
-  return `שלום ${r.ref_name},\nתזכורת קטנה מ${b('עמותת שווים')}: ${parts.join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
+  return `שלום ${r.ref_name},\nבקשה לעדכון מסמכים מ${b('עמותת שווים')}: ${parts.join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
 }
 function thanksText(r) {
   return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\nנשמח להמשיך לשתף פעולה גם בהמשך.\n\n${CFG.noaName} · עמותת שווים`;
@@ -1191,8 +1200,8 @@ function composeAndSend(r, {title, subject, textFor, stamp}) {
   });
 }
 async function doRemind(r) {
-  const sent = await composeAndSend(r, {title:`תזכורת ל${r.ref_name}`, subject:`תזכורת: מסמכי הקליטה של ${r.participant_name} – עמותת שווים`, textFor:reminderText, stamp:'last_reminder_at'});
-  if (sent) { if ($('.drawer')) await refresh(r); else await loadDash(true); toast(`התזכורת ל${r.ref_name} נרשמה`); }
+  const sent = await composeAndSend(r, {title:`בקשה לעדכון ל${r.ref_name}`, subject:`בקשה לעדכון: מסמכי הקליטה של ${r.participant_name} – עמותת שווים`, textFor:reminderText, stamp:'last_reminder_at'});
+  if (sent) { if ($('.drawer')) await refresh(r); else await loadDash(true); toast(`הבקשה לעדכון ל${r.ref_name} נרשמה`); }
 }
 async function doThanks(r) {
   const sent = await composeAndSend(r, {title:`הודעת תודה ל${r.ref_name}`, subject:`מסמכי הקליטה של ${r.participant_name} התקבלו – עמותת שווים`, textFor:thanksText, stamp:'thanks_sent_at'});
@@ -1213,7 +1222,7 @@ async function afterApproved(r) {
 }
 // Noa's check of one document. Clicking the selected button again clears it.
 async function doReview(r, btn) {
-  const doc = btn.dataset.rv, state = btn.getAttribute('aria-pressed') === 'true' ? null : btn.dataset.st;
+  const doc = btn.dataset.rv, state = btn.dataset.st;   // the switch: one side תקין, the other נדרש להחליף
   busy(btn, true);
   let res;
   try { res = await API.review(r.id, doc, state); }
