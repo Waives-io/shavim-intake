@@ -1,8 +1,8 @@
 # בדיקה פנימית לפני מסירה לנועה
 
 כתובות:
-- טופס: https://waives-io.github.io/shavim-intake/
-- דשבורד: https://waives-io.github.io/shavim-intake/?noa (מייל `shavim.holon@gmail.com` + סיסמת הבדיקה שלך)
+- טופס: https://shavim-intake.autumn-glitter-1f91.workers.dev/
+- דשבורד: https://shavim-intake.autumn-glitter-1f91.workers.dev/?noa (מייל `shavim.holon@gmail.com` + סיסמת הבדיקה שלך)
 
 המיילים האוטומטיים עוד לא מחוברים (EmailJS). לכן במסכי הסיום תופיע ההודעה "לא הצלחנו לשלוח את הלינק במייל". זה תקין בשלב הזה.
 

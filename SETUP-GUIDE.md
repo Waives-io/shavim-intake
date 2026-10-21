@@ -4,8 +4,8 @@
 בסוף כל שלב שולחים לי את מה שמסומן ב-📩, ואני מחבר הכול.
 
 **כתובות:**
-- טופס לגורם המפנה: https://waives-io.github.io/shavim-intake/
-- הדשבורד של נועה: https://waives-io.github.io/shavim-intake/?noa
+- טופס לגורם המפנה: https://shavim-intake.autumn-glitter-1f91.workers.dev/
+- הדשבורד של נועה: https://shavim-intake.autumn-glitter-1f91.workers.dev/?noa
 - השרת (Cloudflare, חשבון contact@waives.io): https://shavim-intake.autumn-glitter-1f91.workers.dev
 
 ---
@@ -48,15 +48,15 @@
 
 ---
 
-## שלב 3 — GitHub (הכתובת של האתר) ✅ בוצע
+## שלב 3 — כתובת האתר ✅ בוצע
 
-הקוד במאגר `Waives-io/shavim-intake`, והאתר עולה אוטומטית מכל עדכון.
+הקוד במאגר `Waives-io/shavim-intake` ב-GitHub. האתר והשרת יושבים יחד ב-Cloudflare, בכתובת נפרדת משלהם (מטעמי אבטחה). הכתובת הישנה ב-GitHub מפנה לחדשה.
 
 ---
 
 ## שלב 4 — על המחשב של נועה (פעם אחת)
 
-1. פותחים ב-Chrome או ב-Edge את https://waives-io.github.io/shavim-intake/?noa
+1. פותחים ב-Chrome או ב-Edge את https://shavim-intake.autumn-glitter-1f91.workers.dev/?noa
 2. נכנסים עם `shavim.holon@gmail.com` והסיסמה משלב 1. נשארים מחוברים 30 יום.
 3. מתקינים כאפליקציה: לוחצים על סמל ההתקנה בשורת הכתובת — **Install**
    - נוצר קיצור דרך בשולחן העבודה.

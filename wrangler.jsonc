@@ -3,6 +3,9 @@
   "main": "worker/index.mjs",
   "compatibility_date": "2026-09-19",
   "workers_dev": true,
+  // The site is served by this same Worker, on its own address (no other site shares its storage or saved passwords).
+  // scripts/deploy-site.sh copies the public files into dist/ before deploying.
+  "assets": { "directory": "./dist", "run_worker_first": ["/api/*"] },
   "d1_databases": [{
     "binding": "DB",
     "database_name": "shavim-intake",

@@ -1,13 +1,14 @@
 # shavim-intake — קליטת מתמודד חדש (עמותת שווים)
 
-Static single-page app (GitHub Pages) + Cloudflare Worker API (D1 for data, KV for files) + EmailJS.
+Single-page app + API served by one Cloudflare Worker (static assets from `dist/`, `/api/*` to `worker/index.mjs`, D1 for data, KV for files) + EmailJS.
+Deploy both with `bash scripts/deploy-site.sh`. Its own origin, so no other site shares its storage or saved passwords. The old GitHub Pages address (`gh-pages` branch) only redirects here.
 
 | URL | Who |
 |---|---|
-| https://waives-io.github.io/shavim-intake/ | Referrer form (general link Noa shares) |
+| https://shavim-intake.autumn-glitter-1f91.workers.dev/ | Referrer form (general link Noa shares) |
 | `/?r=<token>` | Referrer's personal continuation link |
 | `/?noa` | Noa's dashboard (password, Bearer session 30 days) |
-| https://shavim-intake.autumn-glitter-1f91.workers.dev | API (Cloudflare account contact@waives.io) |
+| `/api/*` | API (Cloudflare account contact@waives.io) |
 
 - `index.html` — whole app. Config block at the top (`SHAVIM_CONFIG`). Empty `apiUrl` ⇒ demo mode (localStorage + IndexedDB).
 - `worker/index.mjs` — API. Referrers act only through a secret 64-hex token; staff through `Authorization: Bearer`. Daily cron (02:15 UTC) purges KV files 14 days after an approved request was fully downloaded.
