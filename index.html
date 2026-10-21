@@ -177,6 +177,8 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .pill.opt{border-style:dashed;border-color:#cfcfcf}
 .pill.opt.on{border-style:solid;background:color-mix(in srgb,var(--green) 45%,#fff);border-color:transparent}
 .pill.need{background:var(--bg);border:2px solid var(--orange)}
+.pill.chk{background:var(--yellow);border-color:var(--yellow)}
+.frow.old .fname,.doc-files li.old .fname{text-decoration:line-through;color:var(--muted)}
 .rowact{margin-top:6px;min-height:32px;padding:0 12px;font-size:14px}
 .pill svg{width:11px;height:11px}
 .pills .cnt{font-size:13px;color:var(--muted);margin-inline-start:6px}
@@ -342,7 +344,9 @@ function tzOk(v) {
 }
 
 /* ---------- request helpers ---------- */
-const filesOf = (r, key) => (r.files || []).filter(f => f.doc_type === key);
+const isOld = f => !!(f.replaced || f.replaced_at);   // replaced by a newer file: shown, not counted
+const allFilesOf = (r, key) => (r.files || []).filter(f => f.doc_type === key);
+const filesOf = (r, key) => allFilesOf(r, key).filter(f => !isOld(f));
 const missingReq = r => REQUIRED.filter(k => !filesOf(r, k).length);
 const toReplace = r => DOCS.map(d => d.key).filter(k => (r.reviews || {})[k] === 'replace');
 const isLate = r => r.status === 'in_progress' && daysSince(r.created_at) >= OVERDUE_DAYS;
@@ -402,6 +406,15 @@ function mailToNoa(r) {   // only when documents are sent (not on partial saves)
     <p>גורם מפנה: ${esc(r.ref_name)} · ${esc(r.ref_phone)} · ${esc(r.ref_email)}</p>
     ${docsTableHtml(r)}
     <p>${miss.length ? `חסרים עוד ${miss.length} מסמכי חובה.` : 'כל מסמכי החובה הגיעו — אפשר לאשר.'}</p>
+    <p><a href="${noaLink(r)}">לפתיחת הבקשה בדשבורד</a></p></div>`;
+  return sendEmail({to: CFG.noaEmail, subject, html, replyTo: r.ref_email});
+}
+function mailToNoaReplaced(r, key) {
+  const subject = `קליטת מתמודד: ${r.participant_name} – הגיע מסמך חלופי לבדיקה`;
+  const html = `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;line-height:1.6">
+    <p><b>${esc(r.participant_name)}</b> · ת"ז ${esc(r.participant_id)}</p>
+    <p>${esc(r.ref_name)} העלה/תה קובץ חדש במקום המסמך שסומן להחלפה: <b>${esc(DOC[key].label)}</b>.</p>
+    ${docsTableHtml(r)}
     <p><a href="${noaLink(r)}">לפתיחת הבקשה בדשבורד</a></p></div>`;
   return sendEmail({to: CFG.noaEmail, subject, html, replyTo: r.ref_email});
 }
@@ -484,7 +497,7 @@ const Demo = {
   store(db) { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch {} },
   db() { let d = this.load(); if (!d) { d = seedDemo(); this.store(d); } return d; },
   pub(r) { return {token:r.token, participant_name:r.participant_name, participant_id:r.participant_id, ref_name:r.ref_name, ref_email:r.ref_email, ref_phone:r.ref_phone, status:r.status, created_at:r.created_at, reviews:{...(r.reviews || {})},
-    files:r.files.map(f => ({id:f.id, doc_type:f.doc_type, original_name:f.original_name, size_bytes:f.size_bytes, uploaded_at:f.uploaded_at, locked:!!f.downloaded_at}))}; },
+    files:r.files.map(f => ({id:f.id, doc_type:f.doc_type, original_name:f.original_name, size_bytes:f.size_bytes, uploaded_at:f.uploaded_at, locked:!!f.downloaded_at, replaced:!!f.replaced_at}))}; },
   find(db, token) { const r = db.requests.find(x => x.token === token); if (!r) throw new Error('not_found'); return r; },
   open(db, token) { const r = this.find(db, token); if (r.status === 'approved') throw new Error('not_found_or_closed'); return r; },
 };
@@ -504,8 +517,10 @@ const DemoAPI = {
   async upload(token, doc, file) {
     const db = Demo.db(); const r = Demo.open(db, token); const id = uid();
     await idb.set('blobs', id, file);
-    r.files.push({id, doc_type:doc, original_name:file.name, size_bytes:file.size, mime:fileMime(file), uploaded_at:new Date().toISOString(), downloaded_at:null, storage_path:id});
-    if (r.reviews) delete r.reviews[doc];   // new file → Noa checks again
+    const prev = (r.reviews || {})[doc], t = new Date().toISOString();
+    if (prev === 'replace') r.files.forEach(f => { if (f.doc_type === doc && !f.replaced_at) f.replaced_at = t; });
+    if (prev) r.reviews[doc] = 'check';   // Noa had reviewed it: the new file waits for her check
+    r.files.push({id, doc_type:doc, original_name:file.name, size_bytes:file.size, mime:fileMime(file), uploaded_at:t, downloaded_at:null, storage_path:id});
     r.fully_downloaded_at = null; r.updated_at = new Date().toISOString(); Demo.store(db); return Demo.pub(r);
   },
   async remove(token, fileId) {
@@ -753,11 +768,11 @@ function renderDocs() {
         <span class="tag ${d.req ? 'req' : ''}">${d.req ? 'חובה' : 'רשות'}</span>
         ${(r.reviews || {})[d.key] === 'replace' ? '<span class="tag rep">צריך להחליף — מעלים קובץ חדש</span>' : ''}
         <span class="doc-state">${fs.length ? `<span class="ok-dot">${ICON_CHECK}</span>הועלה` : pend.length ? 'ממתין לפרטים' : (d.req ? 'חסר' : '')}</span></div>
-      ${fs.length || pend.length ? `<ul class="doc-files">${pend.map((f, i) => `<li><span class="fname" title="${esc(f.name)}"><bdi>${esc(f.name)}</bdi></span>
+      ${allFilesOf(r, d.key).length || pend.length ? `<ul class="doc-files">${pend.map((f, i) => `<li><span class="fname" title="${esc(f.name)}"><bdi>${esc(f.name)}</bdi></span>
         <span class="fmeta">${fmtSize(f.size)} · יועלה אחרי מילוי הפרטים</span>
-        <button type="button" class="linkbtn x" data-rmp="${d.key}:${i}" aria-label="הסרת ${esc(f.name)}">הסרה</button></li>`).join('')}${fs.map(f => `<li><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
+        <button type="button" class="linkbtn x" data-rmp="${d.key}:${i}" aria-label="הסרת ${esc(f.name)}">הסרה</button></li>`).join('')}${allFilesOf(r, d.key).map(f => `<li class="${isOld(f) ? 'old' : ''}"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
         <span class="fmeta">${fmtSize(f.size_bytes)}</span>
-        ${f.locked ? '<span class="fmeta x">התקבל</span>' : `<button type="button" class="linkbtn x" data-rm="${f.id}" aria-label="הסרת ${esc(f.original_name)}">הסרה</button>`}</li>`).join('')}</ul>` : ''}
+        ${isOld(f) ? '<span class="fmeta x">הוחלף</span>' : f.locked ? '<span class="fmeta x">התקבל</span>' : `<button type="button" class="linkbtn x" data-rm="${f.id}" aria-label="הסרת ${esc(f.original_name)}">הסרה</button>`}</li>`).join('')}</ul>` : ''}
       <div class="doc-actions">
         <button type="button" class="btn small" data-pick="${d.key}">${fs.length ? '+ קובץ נוסף' : '+ העלאת קובץ'}</button>
         <span class="drop-hint">או גוררים קובץ לכאן</span>
@@ -833,6 +848,7 @@ async function handleFiles(key, files) {
     return toast('הקובץ יועלה אחרי מילוי הפרטים');
   }
   const pick = box.querySelector('[data-pick]');
+  const wasReplace = ((F.req || {}).reviews || {})[key] === 'replace';
   try {
     busy(pick, true);
     if (!(await ensureSaved())) { busy(pick, false); return; }
@@ -840,6 +856,7 @@ async function handleFiles(key, files) {
       pick.textContent = files.length > 1 ? `מעלה ${i+1} מתוך ${files.length}…` : 'מעלה…';
       F.req = await API.upload(F.token, key, files[i]);
     }
+    if (wasReplace) mailToNoaReplaced(F.req, key);   // Noa hears about it even if "שליחת העדכון" isn't clicked
     renderDocs(); renderBar();
     toast(files.length > 1 ? `${files.length} קבצים הועלו: ${DOC[key].label}` : `הועלה: ${DOC[key].label}`);
   } catch (e) {
@@ -1013,12 +1030,12 @@ function pillsHtml(r) {
   const req = REQUIRED.filter(k => filesOf(r, k).length).length;
   // red = needs attention (required and missing, or marked "replace"); light green = optional document
   return `<span class="pills">${DOCS.map(d => { const on = filesOf(r, d.key).length > 0, rp = (r.reviews || {})[d.key] === 'replace';
-    const need = rp || (d.req && !on);
-    return `<span class="pill ${need ? 'need' : on ? 'on' : ''} ${d.req ? '' : 'opt'}" title="${esc(d.label)}${rp ? ' – צריך להחליף' : on ? ' – הועלה' : ' – חסר'}">${on && !rp ? ICON_CHECK : ''}</span>`; }).join('')}
+    const need = rp || (d.req && !on), chk = !need && (r.reviews || {})[d.key] === 'check';
+    return `<span class="pill ${need ? 'need' : chk ? 'chk' : on ? 'on' : ''} ${d.req ? '' : 'opt'}" title="${esc(d.label)}${rp ? ' – צריך להחליף' : chk ? ' – קובץ חדש לבדיקה' : on ? ' – הועלה' : ' – חסר'}">${on && !rp && !chk ? ICON_CHECK : ''}</span>`; }).join('')}
     <span class="cnt">${req}/${REQUIRED.length}</span></span>`;
 }
 function foldHtml(r) {
-  const fs = r.files || []; const done = fs.filter(f => f.downloaded_at).length;
+  const fs = (r.files || []).filter(f => !isOld(f)); const done = fs.filter(f => f.downloaded_at).length;
   if (!fs.length || !done) return '<span class="fold">—</span>';
   return done === fs.length ? '<span class="fold full">בתיקייה ✓</span>' : `<span class="fold">חלקי ${done}/${fs.length}</span>`;
 }
@@ -1072,7 +1089,7 @@ function openDrawer(id) {
   dr.querySelector('#back').focus();
 }
 function fillDrawer(r, dr = $('.drawer')) {
-  const miss = missingReq(r), fs = r.files || [], pending = fs.filter(f => !f.downloaded_at);
+  const miss = missingReq(r), fs = r.files || [], pending = fs.filter(f => !f.downloaded_at && !isOld(f));
   const purged = !!r.purged_at;
   const rep = toReplace(r), open = r.status !== 'approved', rv = r.reviews || {};
   let primary = '', why = '';
@@ -1101,16 +1118,17 @@ function fillDrawer(r, dr = $('.drawer')) {
       </dl>
       <div class="sec-title">מסמכים</div>
       ${purged ? `<div class="note plain">הקבצים נמחקו מהענן ${PURGE_DAYS} ימים אחרי ההורדה. העותק נמצא בתיקייה במחשב.</div>` : ''}
-      <div class="dlist">${DOCS.map(d => { const list = filesOf(r, d.key);
+      <div class="dlist">${DOCS.map(d => { const list = allFilesOf(r, d.key), cur = filesOf(r, d.key);
         return `<div class="ditem"><div class="dh">${esc(d.label)} ${d.req ? '' : '<span class="tag">רשות</span>'}
-          ${list.length ? (open && !purged ? `<span class="rvb">
+          ${cur.length ? (open && !purged ? `<span class="rvb">
             <button class="rv ok" data-rv="${d.key}" data-st="ok" aria-pressed="${rv[d.key] === 'ok'}">✓ תקין</button>
             <button class="rv rep" data-rv="${d.key}" data-st="replace" aria-pressed="${rv[d.key] === 'replace'}">צריך להחליף</button></span>` : '')
             : `<span class="miss ${d.req ? 'r' : ''}">${d.req ? 'חסר' : 'לא הועלה'}</span>`}</div>
-          ${list.map(f => `<div class="frow"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
+          ${list.map(f => `<div class="frow ${isOld(f) ? 'old' : ''}"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
             <span class="sub">${fmtSize(f.size_bytes)} · ${fmtDate(f.uploaded_at)}</span>
-            ${f.downloaded_at ? '<span class="in">בתיקייה ✓</span>' : '<span class="new">חדש</span>'}
-            ${purged ? '' : `<span class="x"><button class="linkbtn" data-view="${f.id}">צפייה</button><button class="linkbtn" data-dlf="${f.id}">הורדה</button></span>`}</div>`).join('')}</div>`; }).join('')}</div>
+            ${isOld(f) ? '<span class="sub">הוחלף</span>' : rv[d.key] === 'check' && !f.downloaded_at ? '<span class="new">חדש — לבדיקה</span>'
+              : f.downloaded_at ? '<span class="in">בתיקייה ✓</span>' : '<span class="new">חדש</span>'}
+            ${purged ? '' : `<span class="x"><button class="linkbtn" data-view="${f.id}">צפייה</button>${isOld(f) ? '' : `<button class="linkbtn" data-dlf="${f.id}">הורדה</button>`}</span>`}</div>`).join('')}</div>`; }).join('')}</div>
       <div class="hist">${hist}</div>
       <div class="danger"><button class="linkbtn" id="del">מחיקת הבקשה</button></div>
     </div>
@@ -1239,7 +1257,7 @@ async function findFolder(root, r) {
 }
 // "<document> - <participant>.pdf"; a second file of the same document gets " (2)". Same name → overwritten.
 function fileStem(r, f) {
-  const same = (r.files || []).filter(x => x.doc_type === f.doc_type).sort((a, b) => String(a.uploaded_at).localeCompare(String(b.uploaded_at)));
+  const same = (r.files || []).filter(x => x.doc_type === f.doc_type && !isOld(x)).sort((a, b) => String(a.uploaded_at).localeCompare(String(b.uploaded_at)));
   const n = same.findIndex(x => x.id === f.id) + 1;
   return safeName(`${DOC[f.doc_type].label} - ${r.participant_name}`) + (n > 1 ? ` (${n})` : '');
 }
@@ -1248,7 +1266,7 @@ async function doDownload(r, btn, onlyId) {
   if (!('showDirectoryPicker' in window)) return ask('צריך Chrome או Edge', 'ההורדה לתיקייה ברשת עובדת רק בדפדפן Chrome או Edge במחשב.', [{label:'הבנתי', value:true}]);
   const root = await getRoot(); if (!root) return;
   let dir; try { dir = await findFolder(root, r); } catch (e) { console.error(e); return toast('לא הצלחנו לכתוב בתיקייה הזו. נסי תיקייה אחרת.'); }
-  const pending = (r.files || []).filter(f => onlyId ? f.id === onlyId : !f.downloaded_at);
+  const pending = (r.files || []).filter(f => onlyId ? f.id === onlyId : !f.downloaded_at && !isOld(f));
   busy(btn, true); const done = [];
   try {
     for (let i = 0; i < pending.length; i++) {
@@ -1262,7 +1280,7 @@ async function doDownload(r, btn, onlyId) {
     }
   } catch (e) { console.error(e); toast(`נשמרו ${done.length} מתוך ${pending.length}. הקבצים האחרים לא נשמרו — נסי שוב.`, 5000); }
   if (done.length) {
-    const now = new Date().toISOString(), all = (r.files || []).every(f => f.downloaded_at || done.includes(f.id));
+    const now = new Date().toISOString(), all = (r.files || []).every(f => isOld(f) || f.downloaded_at || done.includes(f.id));
     const mark = async () => {
       await API.markFiles(done, {downloaded_at: now});
       await API.update(r.id, {folder_name: dir.name, last_download_at: now, fully_downloaded_at: all ? now : null});

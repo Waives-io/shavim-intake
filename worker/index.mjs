@@ -86,7 +86,7 @@ async function publicView(db, r) {
   const reviews = await reviewsOf(db, r.id);
   return {token: r.token, participant_name: r.participant_name, participant_id: r.participant_id, ref_name: r.ref_name, ref_email: r.ref_email, ref_phone: r.ref_phone,
     status: r.status, created_at: r.created_at, reviews,
-    files: files.map(f => ({id: f.id, doc_type: f.doc_type, original_name: f.original_name, size_bytes: f.size_bytes, uploaded_at: f.uploaded_at, locked: !!f.downloaded_at}))};
+    files: files.map(f => ({id: f.id, doc_type: f.doc_type, original_name: f.original_name, size_bytes: f.size_bytes, uploaded_at: f.uploaded_at, locked: !!f.downloaded_at, replaced: !!f.replaced_at}))};
 }
 async function byToken(db, token, open = true) {
   must(/^[a-f0-9]{64}$/.test(token), 'not_found', 404);
@@ -135,13 +135,19 @@ async function intakeUpload(env, req, token) {
   must(file.size > 0 && file.size <= MAX_BYTES, 'too_large', 413);
   const buf = await file.arrayBuffer();
   must(sniff(new Uint8Array(buf.slice(0, 16)), ext), 'bad_type', 415);
+  const prev = await one(db, 'SELECT state FROM doc_reviews WHERE request_id=? AND doc_type=?', r.id, docType);
   const id = uid(), key = `f/${r.id}/${id}`, mime = EXT_MIME[ext];
   await env.FILES.put(key, buf, {metadata: {mime, name}});
   try {
     await q(db, 'INSERT INTO files(id,request_id,doc_type,original_name,kv_key,size_bytes,mime,uploaded_at) VALUES (?,?,?,?,?,?,?,?)', id, r.id, docType, name, key, buf.byteLength, mime, now()).run();
   } catch (e) { await env.FILES.delete(key).catch(() => {}); throw e; }   // no orphan document left in KV
   await q(db, 'UPDATE requests SET updated_at=?, fully_downloaded_at=NULL WHERE id=?', now(), r.id).run();
-  await q(db, 'DELETE FROM doc_reviews WHERE request_id=? AND doc_type=?', r.id, docType).run();   // new file → Noa checks again
+  if (prev) {   // Noa had reviewed this document: the new file waits for her check
+    const t = now();
+    if (prev.state === 'replace')   // the earlier file(s) are replaced: kept for history, no longer counted
+      await q(db, 'UPDATE files SET replaced_at=? WHERE request_id=? AND doc_type=? AND id<>? AND replaced_at IS NULL', t, r.id, docType, id).run();
+    await q(db, "UPDATE doc_reviews SET state='check', at=? WHERE request_id=? AND doc_type=?", t, r.id, docType).run();
+  }
   return json(await publicView(db, await one(db, 'SELECT * FROM requests WHERE id=?', r.id)), 201);
 }
 async function intakeRemove(env, token, fileId) {
@@ -157,7 +163,7 @@ async function intakeRemove(env, token, fileId) {
 }
 async function intakeSubmit(env, token) {
   const db = env.DB; const r = await byToken(db, token);
-  const have = new Set((await filesOf(db, r.id)).map(f => f.doc_type));
+  const have = new Set((await filesOf(db, r.id)).filter(f => !f.replaced_at).map(f => f.doc_type));
   must(REQUIRED.every(k => have.has(k)), 'missing_required', 409);
   await q(db, "UPDATE requests SET status='submitted', submitted_at=COALESCE(submitted_at, ?), updated_at=? WHERE id=?", now(), now(), r.id).run();
   return json(await publicView(db, await one(db, 'SELECT * FROM requests WHERE id=?', r.id)));
@@ -218,7 +224,7 @@ async function staffAuth(env, req) {
 async function listRequests(env) {
   const db = env.DB;
   const reqs = await all(db, 'SELECT * FROM requests ORDER BY created_at DESC');
-  const files = await all(db, 'SELECT id,request_id,doc_type,original_name,size_bytes,mime,uploaded_at,downloaded_at FROM files ORDER BY uploaded_at');
+  const files = await all(db, 'SELECT id,request_id,doc_type,original_name,size_bytes,mime,uploaded_at,downloaded_at,replaced_at FROM files ORDER BY uploaded_at');
   const revs = await all(db, 'SELECT request_id, doc_type, state FROM doc_reviews');
   const by = {}, rv = {}; files.forEach(f => (by[f.request_id] ||= []).push(f));
   revs.forEach(x => (rv[x.request_id] ||= {})[x.doc_type] = x.state);
@@ -236,7 +242,7 @@ async function patchRequest(env, req, id) {
     else must(v === null || (typeof v === 'string' && ISO.test(v)), 'bad_value');
     if (k === 'archived_at' && v) must(r.status === 'approved', 'not_approved', 409);
     if (k === 'fully_downloaded_at' && v) {
-      const left = await one(env.DB, 'SELECT COUNT(*) AS n FROM files WHERE request_id=? AND downloaded_at IS NULL', id);
+      const left = await one(env.DB, 'SELECT COUNT(*) AS n FROM files WHERE request_id=? AND downloaded_at IS NULL AND replaced_at IS NULL', id);
       must(left.n === 0, 'not_fully_downloaded', 409);
     }
     sets.push(`${k}=?`); vals.push(v);
@@ -254,7 +260,7 @@ async function reviewDoc(env, req, id, docType) {
   const r = await one(db, 'SELECT * FROM requests WHERE id=?', id);
   must(r, 'not_found', 404);
   must(r.status !== 'approved', 'closed', 409);
-  must(body.state === null || (await one(db, 'SELECT 1 AS x FROM files WHERE request_id=? AND doc_type=?', id, docType)), 'no_file', 409);
+  must(body.state === null || (await one(db, 'SELECT 1 AS x FROM files WHERE request_id=? AND doc_type=? AND replaced_at IS NULL', id, docType)), 'no_file', 409);
   if (body.state === null) await q(db, 'DELETE FROM doc_reviews WHERE request_id=? AND doc_type=?', id, docType).run();
   else await q(db, 'INSERT INTO doc_reviews(request_id,doc_type,state,at) VALUES (?,?,?,?) ON CONFLICT(request_id,doc_type) DO UPDATE SET state=excluded.state, at=excluded.at',
     id, docType, body.state, now()).run();
@@ -302,7 +308,7 @@ export async function dailyCleanup(env) {
   if (!Number.isInteger(days) || days < 1 || days > 365) { console.error('PURGE_DAYS invalid, nothing purged:', env.PURGE_DAYS); return 0; }
   const cutoff = new Date(Date.now() - days * 86400000).toISOString();
   const due = await all(env.DB, `SELECT id FROM requests r WHERE status='approved' AND fully_downloaded_at IS NOT NULL AND fully_downloaded_at<? AND purged_at IS NULL
-    AND NOT EXISTS (SELECT 1 FROM files f WHERE f.request_id=r.id AND f.downloaded_at IS NULL)`, cutoff);
+    AND NOT EXISTS (SELECT 1 FROM files f WHERE f.request_id=r.id AND f.downloaded_at IS NULL AND f.replaced_at IS NULL)`, cutoff);
   for (const r of due) { try { await purgeRequest(env, r.id); } catch (e) { console.error('purge failed', r.id, e.message); } }
   await q(env.DB, 'DELETE FROM events WHERE at<?', new Date(Date.now() - 86400000).toISOString()).run();
   await q(env.DB, 'DELETE FROM sessions WHERE expires_at<?', now()).run();

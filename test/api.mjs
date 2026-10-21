@@ -112,7 +112,9 @@ check('mark a document "replace"', r.status === 200 && r.data.reviews.psychiatri
 r = await api(`/api/intake/${T3}`);
 check('referrer sees which document to replace', r.data.reviews && r.data.reviews.psychiatric === 'replace');
 r = await upload(T3, 'psychiatric', PDF, 'psych-new.pdf');
-check('new upload clears that review', r.status === 201 && !r.data.reviews.psychiatric);
+check('replacement upload → document "check" (לבדיקה)', r.status === 201 && r.data.reviews.psychiatric === 'check');
+const psy = r.data.files.filter(f => f.doc_type === 'psychiatric');
+check('old file marked replaced, new one current', psy.length === 2 && psy.filter(f => f.replaced).length === 1 && psy.find(f => !f.replaced).original_name === 'psych-new.pdf');
 await api(`/api/staff/requests/${R3.id}/docs/committee`, {method: 'PUT', auth: S, json: {state: 'ok'}});
 await api(`/api/staff/requests/${R3.id}/docs/psychiatric`, {method: 'PUT', auth: S, json: {state: 'ok'}});
 r = await api(`/api/staff/requests/${R3.id}/docs/social`, {method: 'PUT', auth: S, json: {state: 'ok'}});
