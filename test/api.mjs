@@ -123,6 +123,21 @@ r = await api(`/api/staff/requests/${R3.id}/docs/social`, {method: 'PUT', auth: 
 check('no review changes after approval → 409', r.status === 409);
 await api(`/api/staff/requests/${R3.id}`, {method: 'DELETE', auth: S});
 
+// change password from inside the dashboard
+const S2 = (await api('/api/staff/login', {method: 'POST', json: {email: EMAIL, password: PASS}})).data.token;
+const NEWPASS = PASS + '-new';
+r = await api('/api/staff/password', {method: 'POST', auth: S, json: {current: 'wrong', next: NEWPASS}});
+check('change password with a wrong current password → 403', r.status === 403);
+r = await api('/api/staff/password', {method: 'POST', auth: S, json: {current: PASS, next: 'short'}});
+check('new password under 8 characters → 400', r.status === 400);
+r = await api('/api/staff/password', {method: 'POST', auth: S, json: {current: PASS, next: NEWPASS}});
+check('change password', r.status === 200);
+check('other computers are logged out', (await api('/api/staff/requests', {auth: S2})).status === 401);
+check('this computer stays logged in', (await api('/api/staff/requests', {auth: S})).status === 200);
+check('old password no longer works', (await api('/api/staff/login', {method: 'POST', json: {email: EMAIL, password: PASS}})).status === 401);
+check('new password works', (await api('/api/staff/login', {method: 'POST', json: {email: EMAIL, password: NEWPASS}})).status === 200);
+await api('/api/staff/password', {method: 'POST', auth: S, json: {current: NEWPASS, next: PASS}});   // back, so the test can run again
+
 r = await api('/api/staff/logout', {method: 'POST', auth: S});
 r = await api('/api/staff/requests', {auth: S});
 check('logout kills the session', r.status === 401);

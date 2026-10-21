@@ -242,8 +242,8 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 /* ---------- login ---------- */
 .login{max-width:400px;margin:40px auto;padding:0 16px}
 .pw{position:relative}
-.pw input{padding-inline-end:46px}
-.pw .eye{position:absolute;inset-inline-end:6px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;width:36px;height:36px;display:grid;place-items:center;color:var(--muted)}
+.pw input{padding-right:46px;padding-left:12px}   /* LTR text starts left, so the eye sits right and never covers it */
+.pw .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;width:36px;height:36px;display:grid;place-items:center;color:var(--muted)}
 
 /* ---------- toast ---------- */
 #toast{position:fixed;bottom:22px;inset-inline:0;display:flex;justify-content:center;pointer-events:none;z-index:80}
@@ -466,6 +466,7 @@ const LiveAPI = {
   async session() { if (!staffToken.get()) return null; try { return await call('/api/staff/session', {staff:true}); } catch { return null; } },
   async login(email, password) { const r = await call('/api/staff/login', {method:'POST', json:{email, password}}); staffToken.set(r.token); },
   async logout() { try { await call('/api/staff/logout', {method:'POST', staff:true}); } catch {} staffToken.set(null); },
+  changePassword: (current, next) => call('/api/staff/password', {method:'POST', json:{current, next}, staff:true}),
   list: () => call('/api/staff/requests', {staff:true}),
   update: (id, patch) => call(`/api/staff/requests/${id}`, {method:'PATCH', json:patch, staff:true}),
   review: (id, doc, state) => call(`/api/staff/requests/${id}/docs/${doc}`, {method:'PUT', json:{state}, staff:true}),
@@ -520,6 +521,7 @@ const DemoAPI = {
   async session() { try { return sessionStorage.getItem('shavim-demo-login') ? {email: CFG.noaEmail} : null; } catch { return null; } },
   async login() { try { sessionStorage.setItem('shavim-demo-login', '1'); } catch {} },
   async logout() { try { sessionStorage.removeItem('shavim-demo-login'); } catch {} },
+  async changePassword(current, next) { if (next.length < 8) { const e = new Error('too_short'); e.status = 400; throw e; } return {ok:true}; },
   async list() { return structuredClone(Demo.db().requests); },
   async update(id, patch) { const db = Demo.db(); Object.assign(db.requests.find(r => r.id === id), patch); Demo.store(db); },
   async review(id, doc, state) {   // same rule as the Worker: all required 'ok' → approved
@@ -567,10 +569,11 @@ function seedDemo() {
 function renderTop(who) {
   $('#top').innerHTML = `<div class="top-in">
       ${who ? `<div class="who"><span class="av" aria-hidden="true">${esc(CFG.noaName[0])}</span><span>${esc(CFG.noaName)}</span>
-        <button class="linkbtn" id="logout">יציאה</button></div>` : ''}
+        <button class="linkbtn" id="chpw">שינוי סיסמה</button><button class="linkbtn" id="logout">יציאה</button></div>` : ''}
       <a class="logo" href="https://www.amutatshavim.co.il/" target="_blank" rel="noopener" aria-label="עמותת שווים – לאתר העמותה"><img src="assets/logo.png" alt="שווים – עמותה לשיקום תעסוקתי"></a>
     </div><div class="strip" aria-hidden="true"><i></i><i></i><i></i><i></i></div>`;
   const lo = $('#logout'); if (lo) lo.onclick = async () => { await API.logout(); location.href = BASE_URL + '?noa'; };
+  const cp = $('#chpw'); if (cp) cp.onclick = changePasswordDialog;
   if (DEMO) $('#demo').innerHTML = `<div class="demo-bar">מצב הדגמה — הנתונים נשמרים רק בדפדפן הזה. מעבר:
     <a href="${BASE_URL}">טופס הגורם המפנה</a>·<a href="${BASE_URL}?noa">הדשבורד של נועה</a>·<button class="linkbtn" id="demo-reset">איפוס נתוני הדגמה</button></div>`;
   const rs = $('#demo-reset'); if (rs) rs.onclick = () => { localStorage.removeItem(DEMO_KEY); location.reload(); };
@@ -896,6 +899,33 @@ async function startNoa() {
   if (!s) return renderLogin();
   renderTop(true); D.openId = new URLSearchParams(location.search).get('open') || null;
   loadDash();
+}
+// "שינוי סיסמה" — Noa picks her own password; other computers are logged out
+const pwField = (id, label, auto) => `<div class="field" style="margin-bottom:14px"><label for="${id}">${label}</label>
+  <div class="pw"><input id="${id}" type="password" dir="ltr" autocomplete="${auto}">
+  <button type="button" class="eye" data-eye="${id}" aria-label="הצגת הסיסמה">${ICON_EYE}</button></div></div>`;
+function changePasswordDialog() {
+  modal(`<h2>שינוי סיסמה</h2>
+    ${pwField('pw0', 'הסיסמה הנוכחית', 'current-password')}${pwField('pw1', 'סיסמה חדשה (לפחות 8 תווים)', 'new-password')}${pwField('pw2', 'שוב את הסיסמה החדשה', 'new-password')}
+    <div class="err" id="pwerr" aria-live="polite"></div>
+    <div class="mbtns"><button class="btn primary" id="pwsave">שמירת הסיסמה</button><button class="btn ghost" data-close>ביטול</button></div>`, (el, close) => {
+    el.querySelectorAll('[data-eye]').forEach(b => b.onclick = () => { const p = el.querySelector('#' + b.dataset.eye), show = p.type === 'password';
+      p.type = show ? 'text' : 'password'; b.setAttribute('aria-label', show ? 'הסתרת הסיסמה' : 'הצגת הסיסמה'); });
+    const err = el.querySelector('#pwerr'), save = el.querySelector('#pwsave');
+    save.onclick = async () => {
+      const cur = el.querySelector('#pw0').value, a = el.querySelector('#pw1').value, b2 = el.querySelector('#pw2').value;
+      err.textContent = '';
+      if (a.length < 8) return err.textContent = 'הסיסמה החדשה צריכה להכיל לפחות 8 תווים';
+      if (a !== b2) return err.textContent = 'שתי הסיסמאות החדשות לא זהות';
+      busy(save, true);
+      try { await API.changePassword(cur, a); close(); toast('הסיסמה עודכנה. מחשבים אחרים נותקו.', 4500); }
+      catch (e) {
+        busy(save, false);
+        err.textContent = e.message === 'bad_current' ? 'הסיסמה הנוכחית לא נכונה' : e.message === 'same_password' ? 'הסיסמה החדשה זהה לנוכחית'
+          : e.message === 'too_short' ? 'הסיסמה החדשה צריכה להכיל לפחות 8 תווים' : 'לא הצלחנו לשמור. נסי שוב.';
+      }
+    };
+  });
 }
 function renderLogin() {
   renderTop(false);

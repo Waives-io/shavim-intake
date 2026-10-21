@@ -305,6 +305,16 @@ async def main():
         await page.click('#back')
         await page.screenshot(path=f'{SHOTS}/07-dashboard-after.png', full_page=True)
 
+        # change password dialog; the eye sits on the right, away from where the password starts
+        await page.click('#chpw'); await page.wait_for_selector('.modal #pw0')
+        box = await page.eval_on_selector('.modal [data-eye=pw0]', 'b => { const r = b.getBoundingClientRect(), i = b.parentElement.querySelector("input").getBoundingClientRect(); return r.left > i.left + i.width / 2; }')
+        check('password eye is on the right side', box)
+        await page.fill('#pw0', 'x'); await page.fill('#pw1', 'abcdefgh'); await page.fill('#pw2', 'abcdefgX')
+        await page.click('#pwsave')
+        check('change password: mismatch caught', 'לא זהות' in await page.text_content('#pwerr'))
+        await page.fill('#pw2', 'abcdefgh'); await page.click('#pwsave'); await page.wait_for_timeout(300)
+        check('change password: saved and dialog closed', await page.query_selector('.modal') is None)
+
         # phone dashboard
         await m.add_init_script(PICKER)
         await mp.goto(BASE + '?noa'); await mp.wait_for_selector('#lp'); await mp.fill('#lp', 'x'); await mp.click('#lb')

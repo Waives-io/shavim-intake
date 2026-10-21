@@ -9,6 +9,7 @@
 // Staff (Bearer session token):
 //   POST   /api/staff/login                 {email, password}
 //   GET    /api/staff/session    POST /api/staff/logout
+//   POST   /api/staff/password              {current, next}  Noa sets her own password; other sessions end
 //   GET    /api/staff/requests
 //   PATCH  /api/staff/requests/:id          whitelisted fields
 //   DELETE /api/staff/requests/:id
@@ -173,12 +174,39 @@ async function staffLogin(env, req) {
   const body = await readJson(req);
   must(String(body.email || '').length <= 200 && String(body.password || '').length <= 200, 'bad_login', 401);
   const okEmail = String(body.email || '').trim().toLowerCase() === String(env.STAFF_EMAIL).toLowerCase();
-  const okPass = !!env.STAFF_PASSWORD && await sameSecret(String(body.password || ''), env.STAFF_PASSWORD);
+  const okPass = await passwordOk(env, String(body.password || ''));
   if (!okEmail || !okPass) { await q(db, 'INSERT INTO login_attempts(ip,at) VALUES (?,?)', ip, now()).run(); throw new HttpError(401, 'bad_login'); }
   await q(db, 'DELETE FROM login_attempts WHERE ip=?', ip).run();
   const token = randomToken();
   await q(db, 'INSERT INTO sessions(token_hash,email,expires_at) VALUES (?,?,?)', await sha256(token), env.STAFF_EMAIL, new Date(Date.now() + SESSION_DAYS * 86400000).toISOString()).run();
   return json({token, email: env.STAFF_EMAIL});
+}
+// Password check: Noa's own password (staff_auth) once she set one, otherwise the STAFF_PASSWORD secret
+const PBKDF2_ITER = 20000;   // keeps the free plan's CPU budget per request
+async function pbkdf2(password, saltHex) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const salt = Uint8Array.from(saltHex.match(/../g), h => parseInt(h, 16));
+  const bits = await crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITER}, key, 256);
+  return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, '0')).join('');
+}
+async function passwordOk(env, password) {
+  const own = await one(env.DB, 'SELECT salt, hash FROM staff_auth WHERE id=1');
+  if (own) return safeEqual(await pbkdf2(password, own.salt), own.hash);
+  return !!env.STAFF_PASSWORD && await sameSecret(password, env.STAFF_PASSWORD);
+}
+async function changePassword(env, req, me) {
+  const body = await readJson(req);
+  const cur = String(body.current || ''), next = String(body.next || '');
+  must(cur.length <= 200 && next.length <= 200, 'bad_value');
+  must(await passwordOk(env, cur), 'bad_current', 403);
+  must(next.length >= 8, 'too_short');
+  must(next !== cur, 'same_password');
+  const salt = randomToken().slice(0, 32);
+  await env.DB.batch([
+    q(env.DB, 'INSERT INTO staff_auth(id,salt,hash,updated_at) VALUES (1,?,?,?) ON CONFLICT(id) DO UPDATE SET salt=excluded.salt, hash=excluded.hash, updated_at=excluded.updated_at', salt, await pbkdf2(next, salt), now()),
+    q(env.DB, 'DELETE FROM sessions WHERE token_hash<>?', me.hash),   // every other computer is logged out
+  ]);
+  return json({ok: true});
 }
 async function staffAuth(env, req) {
   const m = (req.headers.get('authorization') || '').match(/^Bearer ([a-f0-9]{64})$/);
@@ -300,6 +328,7 @@ async function route(req, env) {
   if (p.startsWith('/api/staff/')) {
     const me = await staffAuth(env, req);
     if (p === '/api/staff/session' && m === 'GET') return json({email: me.email});
+    if (p === '/api/staff/password' && m === 'POST') return changePassword(env, req, me);
     if (p === '/api/staff/logout' && m === 'POST') { await q(env.DB, 'DELETE FROM sessions WHERE token_hash=?', me.hash).run(); return json({ok: true}); }
     if (p === '/api/staff/requests' && m === 'GET') return listRequests(env);
     if ((x = p.match(/^\/api\/staff\/requests\/([\w-]+)$/)) && m === 'PATCH') return patchRequest(env, req, x[1]);
