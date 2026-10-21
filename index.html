@@ -412,6 +412,9 @@ function mailToNoa(r) {   // only when documents are sent (not on partial saves)
     <p><a href="${noaLink(r)}">לפתיחת הבקשה בדשבורד</a></p></div>`;
   return sendEmail({to: CFG.noaEmail, subject, html, replyTo: r.ref_email});
 }
+// Signature on every message the referrer receives
+const SIGN = ['נועה לוי פרידנזון, מתאמת שיקום', 'מרכז שווים חולון'];
+const signHtml = () => `<p>תודה,<br>${SIGN.map(esc).join('<br>')}</p>`;
 function mailToNoaReplaced(r, key) {
   const subject = `קליטת מתמודד: ${r.participant_name} – הגיע מסמך חלופי לבדיקה`;
   const html = `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;line-height:1.6">
@@ -425,10 +428,10 @@ function mailToReferrerDone(r) {
   const subject = `קיבלנו את מסמכי הקליטה של ${r.participant_name} – עמותת שווים`;
   const html = `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;line-height:1.6">
     <p>שלום ${esc(r.ref_name)},</p>
-    <p>קיבלנו את מסמכי הקליטה של <b>${esc(r.participant_name)}</b>. ${esc(CFG.noaName)} תעבור עליהם ותעדכן אותך.</p>
+    <p>קיבלנו את מסמכי הקליטה של <b>${esc(r.participant_name)}</b>. נעבור עליהם ונעדכן במידת הצורך.</p>
     ${docsTableHtml(r)}
     <p>צריך להוסיף או להחליף מסמך? דרך הלינק האישי: <a href="${contLink(r)}">${contLink(r)}</a></p>
-    <p>תודה,<br>${esc(CFG.noaName)} · עמותת שווים</p></div>`;
+    ${signHtml()}</div>`;
   return sendEmail({to: r.ref_email, subject, html});
 }
 function mailToReferrer(r) {
@@ -440,7 +443,7 @@ function mailToReferrer(r) {
     <p><a href="${contLink(r)}">${contLink(r)}</a></p>
     ${docsTableHtml(r)}
     ${miss.length ? '<p>כשכל מסמכי החובה יעלו, לוחצים "שליחת המסמכים".</p>' : ''}
-    <p>תודה,<br>${esc(CFG.noaName)} · עמותת שווים</p>
+    ${signHtml()}
     <p style="color:#777;font-size:13px">הלינק אישי — אין להעביר אותו הלאה.</p></div>`;
   return sendEmail({to: r.ref_email, subject, html});
 }
@@ -906,7 +909,7 @@ function endScreen(title, text, showLink) {
 const MAIL_FAILED = 'לא הצלחנו לשלוח את הלינק האישי במייל. כדאי להעתיק ולשמור אותו:';
 function renderThanks(mailOk = true) {
   endScreen(`תודה! המסמכים של ${esc(F.req.participant_name)} נשלחו`,
-    `${esc(CFG.noaName)} מעמותת שווים תעבור עליהם ותעדכן אותך. ` +
+    'נעבור עליהם ונעדכן במידת הצורך. ' +
     (mailOk ? 'שלחנו אליך אישור במייל, עם לינק להוספת מסמכים.' : `לא הצלחנו לשלוח אליך אישור במייל. לינק להוספת מסמכים — כדאי להעתיק ולשמור אותו:`), !mailOk);
 }
 function renderSaved(mailOk = true) {
@@ -1032,7 +1035,7 @@ function renderDash() {
 }
 function linkMsg(wa) {
   const b = s => wa ? `*${s}*` : s;
-  return `שלום,\nלקליטת מתמודד חדש ב${b('עמותת שווים')} יש למלא את הטופס ולהעלות את מסמכי הקליטה כאן:\n${BASE_URL}\n\nמסמכי חובה: טופס החלטת ועדה, דוח פסיכיאטרי עדכני, דוח סוציאלי/פסיכוסוציאלי.\nאפשר לשמור ולהשלים אחר כך.\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
+  return `שלום,\nלקליטת מתמודד חדש ב${b('עמותת שווים')} יש למלא את הטופס ולהעלות את מסמכי הקליטה כאן:\n${BASE_URL}\n\nמסמכי חובה: טופס החלטת ועדה, דוח פסיכיאטרי עדכני, דוח סוציאלי/פסיכוסוציאלי.\nאפשר לשמור ולהשלים אחר כך.\n\nתודה,\n${SIGN.join('\n')}`;
 }
 function pillsHtml(r) {
   const req = REQUIRED.filter(k => filesOf(r, k).length).length;
@@ -1167,10 +1170,10 @@ function reminderText(r, wa) {
   const parts = [];
   if (miss.length) parts.push(`עדיין חסרים מסמכי הקליטה של ${b(r.participant_name)}:\n${miss.map(k => '• ' + DOC[k].label).join('\n')}`);
   if (rep.length) parts.push(`${miss.length ? 'וגם צריך' : `צריך`} להחליף מסמכים של ${b(r.participant_name)}:\n${rep.map(k => '• ' + DOC[k].label).join('\n')}`);
-  return `שלום ${r.ref_name},\nבקשה לעדכון מסמכים מ${b('עמותת שווים')}: ${parts.join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${CFG.noaName} · עמותת שווים`;
+  return `שלום ${r.ref_name},\nבקשה לעדכון מסמכים מ${b('עמותת שווים')}: ${parts.join('\n')}\n\nאפשר להשלים כאן, באותו לינק:\n${contLink(r)}\n\nתודה,\n${SIGN.join('\n')}`;
 }
 function thanksText(r) {
-  return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\nנשמח להמשיך לשתף פעולה גם בהמשך.\n\n${CFG.noaName} · עמותת שווים`;
+  return `שלום ${r.ref_name},\nתודה רבה, כל מסמכי הקליטה של ${r.participant_name} התקבלו.\nנשמח להמשיך לשתף פעולה גם בהמשך.\n\n${SIGN.join('\n')}`;
 }
 // Opens the draft in WhatsApp / mail; the date is recorded only after Noa confirms she sent it
 function composeAndSend(r, {title, subject, textFor, stamp}) {
