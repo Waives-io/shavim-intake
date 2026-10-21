@@ -24,7 +24,7 @@ Security model:
 - Uploads: allow-listed extensions, magic-byte sniffing, 15 MB, max 20 files per request. KV write is rolled back if the D1 insert fails.
 - Limits: 10 new requests/hour per IP, 200/day overall; login 5 failures/15 min per IP and 30 overall.
 - Server-owned rules for retention: ISO timestamps only, `fully_downloaded_at` and purge only when every file is downloaded.
-- Not yet: CAPTCHA (Turnstile) on the form.
+- Cloudflare Turnstile on opening a new request (widget "shavim-holon intake form", secret TURNSTILE_SECRET; test key in .dev.vars).
 
 Tests:
 - `python -m http.server 8765` then `python test/qa.py` — UI in demo mode (44 checks).

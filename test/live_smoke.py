@@ -24,7 +24,7 @@ async def main():
         ctx = await b.new_context(viewport={'width': 1280, 'height': 900}, locale='he-IL')
         async def swap(route):
             r = await route.fetch(); body = await r.text()
-            await route.fulfill(response=r, body=re.sub(r"apiUrl: '[^']*',", f"apiUrl: '{API}',", body, count=1))
+            await route.fulfill(response=r, body=re.sub(r"turnstileSiteKey: '[^']*'", "turnstileSiteKey: '1x00000000000000000000AA'", re.sub(r"apiUrl: '[^']*',", f"apiUrl: '{API}',", body, count=1), count=1))
         await ctx.route(re.compile(r'.*127.0.0.1:8765/(index\.html)?(\?.*)?$'), swap)
         page = await ctx.new_page(); errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))

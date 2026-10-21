@@ -1,7 +1,7 @@
 // עמותת שווים · קליטת מתמודד חדש · API (Cloudflare Worker + D1 + KV)
 //
 // Referrer (anonymous) — only through the secret request token:
-//   POST   /api/intake                      {token|null, details}  create / update details
+//   POST   /api/intake                      {token|null, details, turnstile}  create (needs a Turnstile token) / update details
 //   GET    /api/intake/:token
 //   POST   /api/intake/:token/files         multipart: doc_type, file, replace=1 (the new file replaces the current one)
 //   DELETE /api/intake/:token/files/:id     only before Noa downloaded it
@@ -97,6 +97,15 @@ async function byToken(db, token, open = true) {
 }
 
 /* ---------- referrer handlers ---------- */
+// Cloudflare Turnstile ("am I human") — checked only when a new request is opened
+async function humanOk(env, req, token) {
+  if (!env.TURNSTILE_SECRET) return true;   // not configured (local tests without a key)
+  if (!token || String(token).length > 2048) return false;
+  const fd = new FormData();
+  fd.append('secret', env.TURNSTILE_SECRET); fd.append('response', String(token)); fd.append('remoteip', ipOf(req));
+  try { const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {method: 'POST', body: fd}); return !!(await r.json()).success; }
+  catch { return false; }
+}
 async function intakeSave(env, req) {
   const body = await readJson(req); const d = cleanDetails(body.details); const db = env.DB; const t = now();
   if (body.token) {
@@ -105,6 +114,7 @@ async function intakeSave(env, req) {
       d.participant_name, d.participant_id, d.ref_name, d.ref_email, d.ref_phone, t, r.id).run();
     return json({...await publicView(db, await one(db, 'SELECT * FROM requests WHERE id=?', r.id)), merged: false});
   }
+  must(await humanOk(env, req, body.turnstile), 'captcha_failed', 403);
   const ip = ipOf(req), hourAgo = new Date(Date.now() - 3600000).toISOString(), dayAgo = new Date(Date.now() - 86400000).toISOString();
   must((await one(db, "SELECT COUNT(*) AS n FROM events WHERE kind='create' AND ip=? AND at>?", ip, hourAgo)).n < CREATE_PER_IP_HOUR, 'too_many_requests', 429);
   must((await one(db, "SELECT COUNT(*) AS n FROM events WHERE kind='create' AND at>?", dayAgo)).n < CREATE_PER_DAY, 'too_many_requests', 429);

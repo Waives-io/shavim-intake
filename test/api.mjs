@@ -25,16 +25,18 @@ function upload(token, doc, bytes, name, replace) {
 const D = {participant_name: 'דנה כהן', participant_id: '034567891', ref_name: 'שירה אדלר', ref_email: 'shira@example.co.il', ref_phone: '052-1234567'};
 
 // ---------- referrer ----------
-let r = await api('/api/intake', {method: 'POST', json: {token: null, details: D}});
+let r = await api('/api/intake', {method: 'POST', json: {token: null, turnstile: 'XXXX.DUMMY.TOKEN.XXXX', details: D}});
 check('create request', r.status === 201 && /^[a-f0-9]{64}$/.test(r.data.token), r.status);
 const T = r.data.token;
-r = await api('/api/intake', {method: 'POST', json: {token: null, details: D}});
+r = await api('/api/intake', {method: 'POST', json: {token: null, turnstile: 'XXXX.DUMMY.TOKEN.XXXX', details: D}});
 check('same ID + email → NEW token (never the existing one)', r.status === 201 && r.data.token !== T && !r.data.merged);
 const T2 = r.data.token;
 check('reply to a stranger carries no files of the other request', Array.isArray(r.data.files) && r.data.files.length === 0);
-r = await api('/api/intake', {method: 'POST', json: {token: null, details: {...D, participant_id: '034567892'}}});
+r = await api('/api/intake', {method: 'POST', json: {token: null, details: D}});
+check('new request without the human check → 403', r.status === 403 && r.data.error === 'captcha_failed', JSON.stringify(r.data));
+r = await api('/api/intake', {method: 'POST', json: {token: null, turnstile: 'XXXX.DUMMY.TOKEN.XXXX', details: {...D, participant_id: '034567892'}}});
 check('bad ID check digit → 400', r.status === 400 && r.data.error === 'bad_participant_id', JSON.stringify(r.data));
-r = await api('/api/intake', {method: 'POST', json: {token: null, details: {...D, ref_phone: '03-1234567'}}});
+r = await api('/api/intake', {method: 'POST', json: {token: null, turnstile: 'XXXX.DUMMY.TOKEN.XXXX', details: {...D, ref_phone: '03-1234567'}}});
 check('bad phone → 400', r.status === 400);
 r = await upload(T, 'committee', new TextEncoder().encode('not a pdf'), 'fake.pdf');
 check('fake PDF → 415', r.status === 415);
@@ -103,7 +105,7 @@ check('purged file → 410', r.status === 410);
 r = await api(`/api/staff/requests/${other.id}`, {method: 'DELETE', auth: S});
 check('delete request', r.status === 200 && !(await api('/api/staff/requests', {auth: S})).data.some(x => x.id === other.id));
 // per-document review
-r = await api('/api/intake', {method: 'POST', json: {token: null, details: {...D, participant_id: '201234564'}}});
+r = await api('/api/intake', {method: 'POST', json: {token: null, turnstile: 'XXXX.DUMMY.TOKEN.XXXX', details: {...D, participant_id: '201234564'}}});
 const T3 = r.data.token;
 for (const d of ['committee', 'psychiatric', 'social']) await upload(T3, d, PDF, d + '.pdf');
 await api(`/api/intake/${T3}/submit`, {method: 'POST'});
@@ -150,7 +152,7 @@ for (let i = 0; i < 5; i++) await api('/api/staff/login', {method: 'POST', json:
 r = await api('/api/staff/login', {method: 'POST', json: {email: EMAIL, password: PASS}});
 check('6th login after 5 failures → 429', r.status === 429);
 let last;
-for (let i = 0; i < 10; i++) last = await api('/api/intake', {method: 'POST', json: {token: null, details: D}});
+for (let i = 0; i < 10; i++) last = await api('/api/intake', {method: 'POST', json: {token: null, turnstile: 'XXXX.DUMMY.TOKEN.XXXX', details: D}});
 check('11th+ new request from one address in an hour → 429', last.status === 429, String(last.status));
 r = await fetch(BASE + '/api/intake', {method: 'OPTIONS'});
 check('CORS preflight', r.status === 204 && r.headers.get('access-control-allow-origin') === '*');
