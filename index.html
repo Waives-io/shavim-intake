@@ -160,8 +160,11 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .chip:hover{border-color:#cfcfcf}
 .chip[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:#fff}
 .chip .n{font-weight:400;margin-inline-start:4px;opacity:.8}
-.subchips{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px}
-.chip.sub{font-size:14px;min-height:32px;padding:3px 12px}
+.grp{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px;border:0;border-top:1px solid var(--line);background:var(--soft);font-weight:800;font-size:17px;cursor:pointer;text-align:right}
+.grp .arr{color:var(--yellow);font-size:15px;width:16px;display:inline-block}
+.grp .gn{font-size:14px;font-weight:700;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:0 10px}
+.grp:hover{background:var(--line)}
+.grp-empty{padding:12px 16px;color:var(--muted);font-size:14px;border-top:1px solid var(--line)}
 .search{margin-inline-start:auto;min-width:240px}
 @media (max-width:700px){.search{min-width:100%}}
 
@@ -932,11 +935,13 @@ async function startNoa() {
 }
 // "שינוי סיסמה" — Noa picks her own password; other computers are logged out
 const pwField = (id, label, auto) => `<div class="field" style="margin-bottom:14px"><label for="${id}">${label}</label>
-  <div class="pw"><input id="${id}" type="password" dir="ltr" autocomplete="${auto}">
+  <div class="pw"><input id="${id}" type="password" dir="ltr" autocomplete="${auto}" name="${id}">
   <button type="button" class="eye" data-eye="${id}" aria-label="הצגת הסיסמה">${ICON_EYE}</button></div></div>`;
 function changePasswordDialog() {
+  // the hidden username ties the fields to Noa's account, so a password manager doesn't fill another site's login (or the search box)
   modal(`<h2>שינוי סיסמה</h2>
-    ${pwField('pw0', 'הסיסמה הנוכחית', 'current-password')}${pwField('pw1', 'סיסמה חדשה (לפחות 8 תווים)', 'new-password')}${pwField('pw2', 'שוב את הסיסמה החדשה', 'new-password')}
+    <input type="text" name="username" autocomplete="username" value="${esc(CFG.noaEmail)}" readonly hidden>
+    ${pwField('pw0', 'הסיסמה הנוכחית', 'off')}${pwField('pw1', 'סיסמה חדשה (לפחות 8 תווים)', 'new-password')}${pwField('pw2', 'שוב את הסיסמה החדשה', 'new-password')}
     <div class="err" id="pwerr" aria-live="polite"></div>
     <div class="mbtns"><button class="btn primary" id="pwsave">שמירת הסיסמה</button><button class="btn ghost" data-close>ביטול</button></div>`, (el, close) => {
     el.querySelectorAll('[data-eye]').forEach(b => b.onclick = () => { const p = el.querySelector('#' + b.dataset.eye), show = p.type === 'password';
@@ -982,7 +987,10 @@ function renderLogin() {
 /* =====================================================================
    NOA — dashboard
    ===================================================================== */
-const D = {list:[], filter:'todo', sub:null, q:'', openId:null, flashId:null};
+const D = {list:[], filter:'todo', q:'', openId:null, flashId:null, groups:loadGroups()};
+// which "לטיפול" sections are open (remembered in this browser)
+function loadGroups() { try { return JSON.parse(localStorage.getItem('shavim-groups')) || {submitted:true, in_progress:true}; } catch { return {submitted:true, in_progress:true}; } }
+function saveGroups() { try { localStorage.setItem('shavim-groups', JSON.stringify(D.groups)); } catch {} }
 // archived requests appear only under "ארכיון"
 const live = r => !r.archived_at;
 // Three filters. "לטיפול" (needs action) opens two sub-filters.
@@ -991,7 +999,7 @@ const FILTERS = [
   {id:'approved', label:'אושר', test:r => live(r) && r.status === 'approved'},
   {id:'archived', label:'ארכיון', test:r => !!r.archived_at},
 ];
-const SUBS = [
+const GROUPS = [   // sections inside "לטיפול"
   {id:'submitted', label:'ממתין לאישור'},
   {id:'in_progress', label:'בתהליך'},
 ];
@@ -1028,14 +1036,10 @@ function renderDash() {
     <div class="toolbar">
       <div class="chips" role="group" aria-label="סינון">${FILTERS.map(f =>
         `<button class="chip" data-f="${f.id}" aria-pressed="${D.filter === f.id}">${esc(f.label)}<span class="n">${counts[f.id]}</span></button>`).join('')}</div>
-      <label class="search"><span class="sr">חיפוש</span><input id="q" type="search" placeholder="חיפוש לפי שם, ת״ז או גורם מפנה" value="${esc(D.q)}"></label>
+      <label class="search"><span class="sr">חיפוש</span><input id="q" type="search" autocomplete="off" name="q-search" placeholder="חיפוש לפי שם, ת״ז או גורם מפנה" value="${esc(D.q)}"></label>
     </div>
-    ${D.filter === 'todo' ? `<div class="subchips" role="group" aria-label="לטיפול">${SUBS.map(s =>
-        `<button class="chip sub" data-sub="${s.id}" aria-pressed="${D.sub === s.id}">${esc(s.label)}<span class="n">${D.list.filter(r => live(r) && r.status === s.id).length}</span></button>`).join('')}</div>` : ''}
     <div class="list" id="list"></div></div>`;
-  $$('.chip[data-f]').forEach(c => c.onclick = () => { D.filter = c.dataset.f; D.sub = null; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
-  // a sub-filter narrows "לטיפול"; clicking it again shows both
-  $$('.chip[data-sub]').forEach(c => c.onclick = () => { D.sub = D.sub === c.dataset.sub ? null : c.dataset.sub; renderDash(); const n = $(`.chip[data-sub="${c.dataset.sub}"]`); n && n.focus(); });
+  $$('.chip[data-f]').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
   $('#q').oninput = e => { D.q = e.target.value; renderRows(); };
   $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
   $('#walink').onclick = () => window.open(`https://wa.me/?text=${encodeURIComponent(linkMsg(true))}`, '_blank', 'noopener');
@@ -1057,17 +1061,17 @@ function pillsHtml(r) {
 function foldHtml(r) {
   const fs = (r.files || []).filter(f => !isOld(f)); const done = fs.filter(f => f.downloaded_at).length;
   if (!fs.length || !done) return '<span class="fold">—</span>';
-  return done === fs.length ? '<span class="fold full">בתיקייה ✓</span>' : `<span class="fold">חלקי ${done}/${fs.length}</span>`;
+  return done === fs.length ? '<span class="fold full">הורדו כולם ✓</span>' : `<span class="fold">הורדו ${done} מתוך ${fs.length}</span>`;
 }
 function renderRows() {
   const f = FILTERS.find(x => x.id === D.filter); const q = D.q.trim().toLowerCase();
   // a search looks through every request, archive included; otherwise the selected filter applies
   const rows = q ? D.list.filter(r => [r.participant_name, r.participant_id, r.ref_name, r.ref_email].some(v => String(v).toLowerCase().includes(q)))
-    : D.list.filter(f.test).filter(r => !(D.filter === 'todo' && D.sub) || r.status === D.sub);
-  const head = `<div class="lrow head" aria-hidden="true"><span>מתמודד</span><span>גורם מפנה</span><span>מסמכים (חובה)</span><span>נפתח</span><span>סטטוס</span><span>בתיקייה</span></div>`;
+    : D.list.filter(f.test);
+  const head = `<div class="lrow head" aria-hidden="true"><span>מתמודד</span><span>גורם מפנה</span><span>מסמכים (חובה)</span><span>נפתח</span><span>סטטוס</span><span>הורדו לתיקייה</span></div>`;
   if (!D.list.length) { $('#list').innerHTML = `<div class="empty">עוד אין בקשות. שולחים לגורם המפנה את הלינק לטופס — הבקשה תופיע כאן ברגע שיתחיל למלא.</div>`; return; }
-  if (!rows.length) { $('#list').innerHTML = head + `<div class="empty">${q ? 'לא נמצאו בקשות.' : D.filter === 'todo' && !D.sub ? 'אין בקשות שמחכות לטיפול.' : 'אין בקשות שמתאימות לסינון.'}</div>`; return; }
-  $('#list').innerHTML = head + rows.map(r => {
+  if (!rows.length) { $('#list').innerHTML = head + `<div class="empty">${q ? 'לא נמצאו בקשות.' : D.filter === 'todo' ? 'אין בקשות שמחכות לטיפול.' : 'אין בקשות שמתאימות לסינון.'}</div>`; return; }
+  const rowHtml = r => {
     const late = isLate(r);
     const got = REQUIRED.filter(k => filesOf(r, k).length).length;
     const label = `${r.participant_name}, ת"ז ${r.participant_id}. גורם מפנה: ${r.ref_name}. ` +
@@ -1081,7 +1085,15 @@ function renderRows() {
       <span class="c-d">${fmtDate(r.created_at)}<br><span class="sub">${daysAgoTxt(daysSince(r.created_at))}</span></span>
       <span class="c-s"><span class="badge ${STATUS[r.status].cls}">${STATUS[r.status].label}</span>${late ? `<br><span class="late">ממתין ${daysSince(r.created_at)} ימים</span>` : ''}${act}</span>
       <span class="c-f">${foldHtml(r)}</span></div>`;
-  }).join('');
+  };
+  $('#list').innerHTML = head + (D.filter === 'todo' && !q
+    ? GROUPS.map(g => {
+        const list = rows.filter(r => r.status === g.id), open = D.groups[g.id] !== false;
+        return `<button class="grp" data-g="${g.id}" aria-expanded="${open}"><span class="arr" aria-hidden="true">${open ? '▼' : '◀'}</span>${esc(g.label)}<span class="gn">${list.length}</span></button>`
+          + (open ? (list.length ? list.map(rowHtml).join('') : '<div class="grp-empty">אין בקשות כאן כרגע.</div>') : '');
+      }).join('')
+    : rows.map(rowHtml).join(''));
+  $$('.grp').forEach(b => b.onclick = () => { D.groups[b.dataset.g] = b.getAttribute('aria-expanded') !== 'true'; saveGroups(); renderRows(); const n = $(`.grp[data-g="${b.dataset.g}"]`); n && n.focus(); });
   D.flashId = null;
   $$('.lrow[data-id]').forEach(b => {
     b.onclick = e => { if (!e.target.closest('[data-act]')) openDrawer(b.dataset.id); };
