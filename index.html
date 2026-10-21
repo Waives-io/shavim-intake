@@ -160,6 +160,8 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .chip:hover{border-color:#cfcfcf}
 .chip[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:#fff}
 .chip .n{font-weight:400;margin-inline-start:4px;opacity:.8}
+.subchips{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px}
+.chip.sub{font-size:14px;min-height:32px;padding:3px 12px}
 .search{margin-inline-start:auto;min-width:240px}
 @media (max-width:700px){.search{min-width:100%}}
 
@@ -980,15 +982,18 @@ function renderLogin() {
 /* =====================================================================
    NOA — dashboard
    ===================================================================== */
-const D = {list:[], filter:'all', q:'', openId:null, flashId:null};
+const D = {list:[], filter:'todo', sub:null, q:'', openId:null, flashId:null};
 // archived requests appear only under "ארכיון"
 const live = r => !r.archived_at;
+// Three filters. "לטיפול" (needs action) opens two sub-filters.
 const FILTERS = [
-  {id:'all', label:'הכל', test:live},
-  {id:'in_progress', label:'בתהליך', test:r => live(r) && r.status === 'in_progress'},
-  {id:'submitted', label:'ממתין לאישור', test:r => live(r) && r.status === 'submitted'},
+  {id:'todo', label:'לטיפול', test:r => live(r) && r.status !== 'approved'},
   {id:'approved', label:'אושר', test:r => live(r) && r.status === 'approved'},
   {id:'archived', label:'ארכיון', test:r => !!r.archived_at},
+];
+const SUBS = [
+  {id:'submitted', label:'ממתין לאישור'},
+  {id:'in_progress', label:'בתהליך'},
 ];
 const ORDER = {submitted:0, in_progress:1, approved:2};
 function sortList(a) {
@@ -1025,8 +1030,12 @@ function renderDash() {
         `<button class="chip" data-f="${f.id}" aria-pressed="${D.filter === f.id}">${esc(f.label)}<span class="n">${counts[f.id]}</span></button>`).join('')}</div>
       <label class="search"><span class="sr">חיפוש</span><input id="q" type="search" placeholder="חיפוש לפי שם, ת״ז או גורם מפנה" value="${esc(D.q)}"></label>
     </div>
+    ${D.filter === 'todo' ? `<div class="subchips" role="group" aria-label="לטיפול">${SUBS.map(s =>
+        `<button class="chip sub" data-sub="${s.id}" aria-pressed="${D.sub === s.id}">${esc(s.label)}<span class="n">${D.list.filter(r => live(r) && r.status === s.id).length}</span></button>`).join('')}</div>` : ''}
     <div class="list" id="list"></div></div>`;
-  $$('.chip').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
+  $$('.chip[data-f]').forEach(c => c.onclick = () => { D.filter = c.dataset.f; D.sub = null; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
+  // a sub-filter narrows "לטיפול"; clicking it again shows both
+  $$('.chip[data-sub]').forEach(c => c.onclick = () => { D.sub = D.sub === c.dataset.sub ? null : c.dataset.sub; renderDash(); const n = $(`.chip[data-sub="${c.dataset.sub}"]`); n && n.focus(); });
   $('#q').oninput = e => { D.q = e.target.value; renderRows(); };
   $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
   $('#walink').onclick = () => window.open(`https://wa.me/?text=${encodeURIComponent(linkMsg(true))}`, '_blank', 'noopener');
@@ -1052,10 +1061,12 @@ function foldHtml(r) {
 }
 function renderRows() {
   const f = FILTERS.find(x => x.id === D.filter); const q = D.q.trim().toLowerCase();
-  const rows = D.list.filter(f.test).filter(r => !q || [r.participant_name, r.participant_id, r.ref_name, r.ref_email].some(v => String(v).toLowerCase().includes(q)));
+  // a search looks through every request, archive included; otherwise the selected filter applies
+  const rows = q ? D.list.filter(r => [r.participant_name, r.participant_id, r.ref_name, r.ref_email].some(v => String(v).toLowerCase().includes(q)))
+    : D.list.filter(f.test).filter(r => !(D.filter === 'todo' && D.sub) || r.status === D.sub);
   const head = `<div class="lrow head" aria-hidden="true"><span>מתמודד</span><span>גורם מפנה</span><span>מסמכים (חובה)</span><span>נפתח</span><span>סטטוס</span><span>בתיקייה</span></div>`;
   if (!D.list.length) { $('#list').innerHTML = `<div class="empty">עוד אין בקשות. שולחים לגורם המפנה את הלינק לטופס — הבקשה תופיע כאן ברגע שיתחיל למלא.</div>`; return; }
-  if (!rows.length) { $('#list').innerHTML = head + `<div class="empty">אין בקשות שמתאימות לסינון.</div>`; return; }
+  if (!rows.length) { $('#list').innerHTML = head + `<div class="empty">${q ? 'לא נמצאו בקשות.' : D.filter === 'todo' && !D.sub ? 'אין בקשות שמחכות לטיפול.' : 'אין בקשות שמתאימות לסינון.'}</div>`; return; }
   $('#list').innerHTML = head + rows.map(r => {
     const late = isLate(r);
     const got = REQUIRED.filter(k => filesOf(r, k).length).length;

@@ -176,17 +176,20 @@ async def main():
         await page.wait_for_selector('.lrow[data-id]')
         rows = await page.eval_on_selector_all('.lrow[data-id]', 'e => e.length')
         dups = await page.eval_on_selector_all('.lrow[data-id]:has-text("שגיא רון")', 'e => e.length')
-        check('dashboard lists demo + 2 new requests, both with the same name and ID', rows == 8 and dups == 2, f'rows={rows} dups={dups}')
+        check('"לטיפול" (default) lists open requests: demo + 2 new, same name and ID', rows == 7 and dups == 2, f'rows={rows} dups={dups}')
+        tops = await page.eval_on_selector_all('.chip[data-f]', 'e => e.map(x => x.textContent.replace(/\\d+/g, "").trim())')
+        subs = await page.eval_on_selector_all('.chip[data-sub]', 'e => e.map(x => x.textContent.replace(/\\d+/g, "").trim())')
+        check('3 filters, "לטיפול" shows its 2 sub-filters', tops == ['לטיפול', 'אושר', 'ארכיון'] and subs == ['ממתין לאישור', 'בתהליך'], f'{tops} {subs}')
         first = await page.text_content('.lrow[data-id] .pname')
         check('awaiting approval sorted first', first in ('נועם בר', 'יוסי לוי', 'שגיא רון'), first)
         await page.screenshot(path=f'{SHOTS}/05-dashboard.png', full_page=True)
         check('no separate 7+ days filter', await page.query_selector('.chip[data-f=late]') is None)
-        await page.click('.chip[data-f=in_progress]')
+        await page.click('.chip[data-sub=in_progress]')
         late = await page.eval_on_selector_all('.lrow[data-id]:has([data-act=remind]) .pname', 'e => e.map(x => x.textContent)')
         check('late requests (in progress) have a reminder button in the row', sorted(late) == sorted(['רותם שחר', 'דנה כהן']), str(late))
         need = await page.eval_on_selector_all('.lrow[data-id]:has-text("דנה כהן") .pill.need', 'e => e.length')
         check('missing required documents are red squares', need == 2, str(need))
-        await page.click('.chip[data-f=all]')
+        await page.click('.chip[data-sub=in_progress]')   # clicking again shows all "לטיפול"
         await page.fill('#q', '0345')
         names = await page.eval_on_selector_all('.lrow[data-id] .pname', 'e => e.map(x => x.textContent)')
         check('search by ID', set(names) == {'דנה כהן', 'שגיא רון'}, str(names))
@@ -273,8 +276,10 @@ async def main():
         check('thanks text exact', 'תודה רבה, כל מסמכי הקליטה של שגיא רון התקבלו.' in tmsg)
         await page.click('.modal [data-close]')
         await page.click('#back')
+        await page.click('.chip[data-f=approved]')
         st = await page.eval_on_selector_all('.lrow[data-id]:has-text("שגיא רון") .badge', 'e => e.map(x => x.textContent.trim())')
-        check('status now אושר', sorted(st) == ['אושר', 'בתהליך'], str(st))
+        check('approved request moves to "אושר"', st == ['אושר'], str(st))
+        await page.click('.chip[data-f=todo]')
 
         # partial download then add-on: referrer of יוסי לוי adds a file later
         await page.click('.lrow[data-id]:has-text("יוסי לוי")')
@@ -308,6 +313,7 @@ async def main():
             const d = await root.getDirectoryHandle('נועם בר - 01.10.2026', {create:true});
             const w = await (await d.getFileHandle('טופס החלטת ועדה - נועם בר.pdf', {create:true})).createWritable(); await w.write('OLD'); await w.close(); }""")
         await page.click('#back')
+        await page.click('.chip[data-f=approved]')   # approved earlier by the per-document review
         await page.click('.lrow[data-id]:has-text("נועם בר")')
         await page.click('#dl')
         await page.wait_for_timeout(1000)
@@ -319,6 +325,7 @@ async def main():
         await page.screenshot(path=f'{SHOTS}/07-dashboard-after.png', full_page=True)
 
         # one file at a time
+        await page.click('.chip[data-f=todo]')
         await page.click('.lrow[data-id]:has-text("רותם שחר")'); await page.wait_for_selector('.drawer [data-dlf]')
         await page.click('.drawer [data-dlf]'); await page.wait_for_timeout(900)
         files = await page.evaluate("""async () => { const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('טפסי קליטת מתמודד חדש');
