@@ -305,6 +305,15 @@ async def main():
         await page.click('#back')
         await page.screenshot(path=f'{SHOTS}/07-dashboard-after.png', full_page=True)
 
+        # one file at a time
+        await page.click('.lrow[data-id]:has-text("רותם שחר")'); await page.wait_for_selector('.drawer [data-dlf]')
+        await page.click('.drawer [data-dlf]'); await page.wait_for_timeout(900)
+        files = await page.evaluate("""async () => { const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('טפסי קליטת מתמודד חדש');
+          for await (const [n, h] of root.entries()) if (n.startsWith('רותם שחר')) { const o=[]; for await (const [fn] of h.entries()) o.push(fn); return o; } return []; }""")
+        check('single-file download saves just that file', len(files) == 1, json.dumps(files, ensure_ascii=False))
+        check('…and the rest are still waiting', '(1)' in (await page.text_content('.drawer #dl') or ''))
+        await page.click('#back')
+
         # change password dialog; the eye sits on the right, away from where the password starts
         await page.click('#chpw'); await page.wait_for_selector('.modal #pw0')
         box = await page.eval_on_selector('.modal [data-eye=pw0]', 'b => { const r = b.getBoundingClientRect(), i = b.parentElement.querySelector("input").getBoundingClientRect(); return r.left > i.left + i.width / 2; }')

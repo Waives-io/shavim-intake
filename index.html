@@ -224,7 +224,7 @@ h2{font-size:19px;font-weight:700;margin:0 0 14px}
 .frow .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
 .frow .in{font-size:13px;font-weight:600}
 .frow .new{font-size:13px;font-weight:700;background:var(--yellow);padding:0 8px;border-radius:999px}
-.frow .x{margin-inline-start:auto}
+.frow .x{margin-inline-start:auto;display:flex;gap:12px}
 .hist{font-size:13px;color:var(--muted);margin-top:18px;line-height:1.9}
 .dr-actions{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:14px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .dr-actions .why{font-size:14px;color:var(--muted);flex-basis:100%}
@@ -1110,7 +1110,7 @@ function fillDrawer(r, dr = $('.drawer')) {
           ${list.map(f => `<div class="frow"><span class="fname" title="${esc(f.original_name)}"><bdi>${esc(f.original_name)}</bdi></span>
             <span class="sub">${fmtSize(f.size_bytes)} · ${fmtDate(f.uploaded_at)}</span>
             ${f.downloaded_at ? '<span class="in">בתיקייה ✓</span>' : '<span class="new">חדש</span>'}
-            ${purged ? '' : `<button class="linkbtn x" data-view="${f.id}">צפייה</button>`}</div>`).join('')}</div>`; }).join('')}</div>
+            ${purged ? '' : `<span class="x"><button class="linkbtn" data-view="${f.id}">צפייה</button><button class="linkbtn" data-dlf="${f.id}">הורדה</button></span>`}</div>`).join('')}</div>`; }).join('')}</div>
       <div class="hist">${hist}</div>
       <div class="danger"><button class="linkbtn" id="del">מחיקת הבקשה</button></div>
     </div>
@@ -1124,6 +1124,7 @@ function fillDrawer(r, dr = $('.drawer')) {
   dr.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => doReview(r, b));
   const on = (id, fn) => { const b = dr.querySelector('#' + id); if (b) b.onclick = e => fn(r, e.currentTarget); };
   on('approve', doApprove); on('remind', doRemind); on('thanks', doThanks); on('dl', doDownload); on('del', doDelete); on('arch', doArchive);
+  dr.querySelectorAll('[data-dlf]').forEach(b => b.onclick = () => doDownload(r, b, b.dataset.dlf));   // one file
 }
 async function refresh(r) {
   await loadDash(true);
@@ -1242,11 +1243,12 @@ function fileStem(r, f) {
   const n = same.findIndex(x => x.id === f.id) + 1;
   return safeName(`${DOC[f.doc_type].label} - ${r.participant_name}`) + (n > 1 ? ` (${n})` : '');
 }
-async function doDownload(r, btn) {
+// All files not yet in the folder, or one file (onlyId) — also one that was already downloaded
+async function doDownload(r, btn, onlyId) {
   if (!('showDirectoryPicker' in window)) return ask('צריך Chrome או Edge', 'ההורדה לתיקייה ברשת עובדת רק בדפדפן Chrome או Edge במחשב.', [{label:'הבנתי', value:true}]);
   const root = await getRoot(); if (!root) return;
   let dir; try { dir = await findFolder(root, r); } catch (e) { console.error(e); return toast('לא הצלחנו לכתוב בתיקייה הזו. נסי תיקייה אחרת.'); }
-  const pending = (r.files || []).filter(f => !f.downloaded_at);
+  const pending = (r.files || []).filter(f => onlyId ? f.id === onlyId : !f.downloaded_at);
   busy(btn, true); const done = [];
   try {
     for (let i = 0; i < pending.length; i++) {
@@ -1260,13 +1262,13 @@ async function doDownload(r, btn) {
     }
   } catch (e) { console.error(e); toast(`נשמרו ${done.length} מתוך ${pending.length}. הקבצים האחרים לא נשמרו — נסי שוב.`, 5000); }
   if (done.length) {
-    const now = new Date().toISOString(), all = done.length === pending.length;
+    const now = new Date().toISOString(), all = (r.files || []).every(f => f.downloaded_at || done.includes(f.id));
     const mark = async () => {
       await API.markFiles(done, {downloaded_at: now});
       await API.update(r.id, {folder_name: dir.name, last_download_at: now, fully_downloaded_at: all ? now : null});
     };
     // retry once, so saved files are not downloaded again as duplicates
-    try { await mark().catch(mark); if (all) toast(`${done.length} קבצים נשמרו בתיקייה "${dir.name}"`, 4500); }
+    try { await mark().catch(mark); if (onlyId) toast(`הקובץ נשמר בתיקייה "${dir.name}"`, 4500); else if (all) toast(`${done.length} קבצים נשמרו בתיקייה "${dir.name}"`, 4500); }
     catch (e) { console.error(e); toast(`הקבצים נשמרו בתיקייה "${dir.name}", אבל לא הצלחנו לסמן אותם במערכת. רענני את הדף לפני הורדה נוספת.`, 7000); }
   }
   try { await refresh(r); } catch (e) { console.error(e); busy(btn, false); }
