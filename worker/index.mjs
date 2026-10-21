@@ -343,6 +343,9 @@ async function route(req, env) {
     if (p === '/api/staff/files' && m === 'PATCH') return patchFiles(env, req);
     if ((x = p.match(/^\/api\/staff\/files\/([\w-]+)$/)) && m === 'GET') return getFile(env, x[1]);
   }
+  // Not the API: a visit to the old address goes to the site, keeping ?r= / ?noa
+  if (!p.startsWith('/api') && (m === 'GET' || m === 'HEAD') && env.SITE_URL)
+    return Response.redirect(env.SITE_URL.replace(/\/+$/, '') + (p || '/') + url.search, 301);
   throw new HttpError(404, 'not_found');
 }
 

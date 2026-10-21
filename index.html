@@ -13,7 +13,7 @@
 
 <script>
 /* =====================================================================
-   הגדרות — ממלאים פעם אחת (ראו SETUP-GUIDE.md)
+   הגדרות הסניף — כל מה שמשתנה בין סניפים נמצא כאן בלבד (ראו SETUP-GUIDE.md)
    כל עוד apiUrl ריק, האפליקציה רצה במצב הדגמה (הנתונים בדפדפן בלבד).
    ===================================================================== */
 window.SHAVIM_CONFIG = {
@@ -23,8 +23,10 @@ window.SHAVIM_CONFIG = {
     serviceId: 'service_shavimholon',
     templateId: 'template_shavim'
   },
-  noaEmail: 'shavim.holon@gmail.com',
+  branchName: 'מרכז שווים חולון',
+  noaEmail: 'shavim.holon@gmail.com',     // כניסה לדשבורד + מיילים על בקשות חדשות
   noaName: 'נועה',
+  signature: ['נועה לוי פרידנזון, מתאמת שיקום', 'מרכז שווים חולון'],   // חתימה בהודעות לגורם המפנה
   whatsappBusiness: '051-5773381',
   publicUrl: ''             // ריק = הכתובת הנוכחית של האתר
 };
@@ -418,7 +420,7 @@ function mailToNoa(r) {   // only when documents are sent (not on partial saves)
   return sendEmail({to: CFG.noaEmail, subject, html, replyTo: r.ref_email});
 }
 // Signature on every message the referrer receives
-const SIGN = ['נועה לוי פרידנזון, מתאמת שיקום', 'מרכז שווים חולון'];
+const SIGN = CFG.signature;
 const signHtml = () => `<p>תודה,<br>${SIGN.map(esc).join('<br>')}</p>`;
 function mailToNoaReplaced(r, key) {
   const subject = `קליטת מתמודד: ${r.participant_name} – הגיע מסמך חלופי לבדיקה`;

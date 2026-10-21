@@ -1,11 +1,13 @@
 # shavim-intake — קליטת מתמודד חדש (עמותת שווים)
 
-Single-page app + API served by one Cloudflare Worker (static assets from `dist/`, `/api/*` to `worker/index.mjs`, D1 for data, KV for files) + EmailJS.
-Deploy both with `bash scripts/deploy-site.sh`. Its own origin, so no other site shares its storage or saved passwords. The old GitHub Pages address (`gh-pages` branch) only redirects here.
+Site on Cloudflare Pages (project `shavim-holon`, https://shavim-holon.waives.io — CNAME in the waives.io zone on Netlify, the only record added there) + API on the Worker `shavim-intake` (D1 for data, KV for files) + EmailJS.
+Deploy both with `bash scripts/deploy-site.sh`. The site has its own origin, so no other site shares its storage or saved passwords. Old addresses (workers.dev pages, GitHub Pages `gh-pages`) redirect to it.
+
+**Another branch:** everything branch-specific is in `SHAVIM_CONFIG` at the top of index.html (branch name, coordinator, login/notification email, signature, WhatsApp, EmailJS ids) and in `wrangler.jsonc` vars (`STAFF_EMAIL`, `SITE_URL`). A new branch = its own D1 + KV + Worker + Pages project + one CNAME `shavim-<branch>.waives.io`, same code.
 
 | URL | Who |
 |---|---|
-| https://shavim-intake.autumn-glitter-1f91.workers.dev/ | Referrer form (general link Noa shares) |
+| https://shavim-holon.waives.io/ | Referrer form (general link Noa shares) |
 | `/?r=<token>` | Referrer's personal continuation link |
 | `/?noa` | Noa's dashboard (password, Bearer session 30 days) |
 | `/api/*` | API (Cloudflare account contact@waives.io) |
