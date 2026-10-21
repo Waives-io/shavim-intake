@@ -1048,12 +1048,12 @@ function renderRows() {
   $('#list').innerHTML = head + rows.map(r => {
     const late = isLate(r);
     const got = REQUIRED.filter(k => filesOf(r, k).length).length;
-    const label = `${r.participant_name}, ת"ז ${r.participant_id}${r.possible_duplicate ? ', ת"ז קיימת בבקשה אחרת' : ''}. גורם מפנה: ${r.ref_name}. ` +
+    const label = `${r.participant_name}, ת"ז ${r.participant_id}. גורם מפנה: ${r.ref_name}. ` +
       `מסמכי חובה: ${got} מתוך ${REQUIRED.length}. נפתח: ${fmtDate(r.created_at)}. סטטוס: ${STATUS[r.status].label}${late ? `, ממתין ${daysSince(r.created_at)} ימים` : ''}.`;
     const act = late ? `<br><button class="btn small rowact" data-act="remind" data-id="${r.id}">שליחת תזכורת</button>`
       : r.status === 'approved' && !r.archived_at ? `<br><button class="btn small rowact" data-act="arch" data-id="${r.id}">העברה לארכיון</button>` : '';
     return `<div class="lrow ${D.flashId === r.id ? 'flash' : ''}" data-id="${r.id}" role="button" tabindex="0" aria-label="${esc(label)}">
-      <span class="c-n"><span class="pname">${esc(r.participant_name)}</span><br><span class="sub ltr">${esc(r.participant_id)}</span>${r.possible_duplicate ? ' <span class="sub">· ת״ז קיימת בבקשה אחרת</span>' : ''}</span>
+      <span class="c-n"><span class="pname">${esc(r.participant_name)}</span><br><span class="sub ltr">${esc(r.participant_id)}</span></span>
       <span class="c-r">${esc(r.ref_name)}<br><bdi class="sub ltr">${esc(r.ref_phone)}</bdi></span>
       <span class="c-p">${pillsHtml(r)}</span>
       <span class="c-d">${fmtDate(r.created_at)}<br><span class="sub">${daysAgoTxt(daysSince(r.created_at))}</span></span>
@@ -1110,7 +1110,7 @@ function fillDrawer(r, dr = $('.drawer')) {
       ${isLate(r) ? `<span class="late" style="margin-inline-start:10px">ממתין ${daysSince(r.created_at)} ימים</span>` : ''}
       <h1 style="margin-top:10px">${esc(r.participant_name)}</h1>
       <dl class="kv">
-        <dt>ת"ז</dt><dd><bdi class="ltr">${esc(r.participant_id)}</bdi>${r.possible_duplicate ? ' · <span class="sub">ת״ז זו קיימת גם בבקשה אחרת</span>' : ''}</dd>
+        <dt>ת"ז</dt><dd><bdi class="ltr">${esc(r.participant_id)}</bdi></dd>
         <dt>גורם מפנה</dt><dd>${esc(r.ref_name)}</dd>
         <dt>נייד</dt><dd><a href="https://wa.me/${waPhone(r.ref_phone)}" target="_blank" rel="noopener"><bdi class="ltr">${esc(r.ref_phone)}</bdi></a></dd>
         <dt>מייל</dt><dd><a href="mailto:${esc(r.ref_email)}"><bdi class="ltr">${esc(r.ref_email)}</bdi></a></dd>
