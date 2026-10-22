@@ -1061,9 +1061,7 @@ function renderDash() {
   $('#app').innerHTML = `<div class="wrap wide">
     <div class="dash-head"><h1>סטטוס מסמכי חובה לקליטת מתמודד חדש</h1>
       <div class="share">
-        <button class="btn small" id="cplink">העתקת הלינק לטופס</button>
-        <button class="btn small" id="walink">שליחה ב-WhatsApp</button>
-        <button class="btn small" id="mllink">שליחה במייל</button></div></div>
+        <button class="btn small" id="cplink">העתקת הלינק לטופס</button></div></div>
     ${'showDirectoryPicker' in window ? '' : '<div class="folderline">ההורדה לתיקייה עובדת ב-Chrome או Edge במחשב.</div>'}
     <div class="toolbar">
       <div class="chips" role="group" aria-label="סינון">${FILTERS.map(f =>
@@ -1074,13 +1072,7 @@ function renderDash() {
   $$('.chip[data-f]').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
   $('#q').oninput = e => { D.q = e.target.value; renderRows(); };
   $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
-  $('#walink').onclick = () => window.open(`https://wa.me/?text=${encodeURIComponent(linkMsg(true))}`, '_blank', 'noopener');
-  $('#mllink').onclick = () => { location.href = `mailto:?subject=${encodeURIComponent('טופס קליטת מתמודד חדש – עמותת שווים')}&body=${encodeURIComponent(linkMsg(false))}`; };
   renderRows();
-}
-function linkMsg(wa) {
-  const b = s => wa ? `*${s}*` : s;
-  return `שלום,\nלקליטת מתמודד חדש ב${b('עמותת שווים')} יש למלא את הטופס ולהעלות את מסמכי הקליטה כאן:\n${BASE_URL}\n\nמסמכי חובה: טופס החלטת ועדה, דוח פסיכיאטרי עדכני, דוח סוציאלי/פסיכוסוציאלי.\nאפשר לשמור ולהשלים אחר כך.\n\nתודה,\n${SIGN.join('\n')}`;
 }
 function pillsHtml(r) {
   const req = REQUIRED.filter(k => filesOf(r, k).length).length;
