@@ -4,6 +4,9 @@ Site on Cloudflare Pages (project `shavim-holon`, https://shavim-holon.waives.io
 Deploy both with `bash scripts/deploy-site.sh`. The site has its own origin, so no other site shares its storage or saved passwords. Old addresses (workers.dev pages, GitHub Pages `gh-pages`) redirect to it.
 
 **Another branch:** everything branch-specific is in `SHAVIM_CONFIG` at the top of index.html (branch name, coordinator, login/notification email, signature, WhatsApp, EmailJS ids) and in `wrangler.jsonc` vars (`STAFF_EMAIL`, `SITE_URL`). A new branch = its own D1 + KV + Worker + Pages project + one CNAME `shavim-<branch>.waives.io`, same code.
+Branch copies keep their settings in `branches/<name>.config.js` (replaces `SHAVIM_CONFIG` at deploy) + `branches/<name>.wrangler.jsonc`, and deploy with `bash scripts/deploy-site.sh <name>`. The first `wrangler pages project create` needs `--force` (otherwise wrangler turns it into a Worker deploy that overwrites the Worker of the same name).
+
+**Demo copy** (for presentations, dummy data): https://shavim-demo.pages.dev/?noa — login contact@waives.io, Worker `shavim-demo`, D1 `shavim-demo`, KV `shavim-demo-files`, no Turnstile. Reset to fresh dummy data with `py scripts/seed-demo.py`.
 
 | URL | Who |
 |---|---|

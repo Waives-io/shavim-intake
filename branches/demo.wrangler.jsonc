@@ -1,0 +1,22 @@
+// Demo copy for presentations (dummy data). Same code as Holon, its own database, files and password.
+//   bash scripts/deploy-site.sh demo
+{
+  "name": "shavim-demo",
+  "main": "../worker/index.mjs",
+  "compatibility_date": "2026-09-19",
+  "workers_dev": true,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "shavim-demo",
+    "database_id": "f7109c4c-64fd-4535-8591-e4fc39630d6a",
+    "migrations_dir": "../migrations"
+  }],
+  "kv_namespaces": [{ "binding": "FILES", "id": "23649df5e42a4019bf29ce50c169e76c" }],
+  "triggers": { "crons": ["15 2 * * *"] },
+  "vars": {
+    "STAFF_EMAIL": "contact@waives.io",
+    "PURGE_DAYS": "14",
+    "SITE_URL": "https://shavim-demo.pages.dev"
+  }
+  // Secret: STAFF_PASSWORD (npx wrangler secret put STAFF_PASSWORD -c branches/demo.wrangler.jsonc)
+}
