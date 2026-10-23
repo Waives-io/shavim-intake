@@ -394,6 +394,10 @@ async function sendEmail({to, subject, html, replyTo}) {
     if (DEMO) { toast(`(הדגמה) מייל אל ${to} לא נשלח באמת`); return true; }
     return false;
   }
+  // example.* addresses (tests, demo data) never deliver; sending would bounce back into the coordinator's inbox
+  if (/@(.+\.)?example(\.[a-z]{2,3}){1,2}$/i.test(String(to).trim())) {
+    toast(`מייל אל ${to} לא נשלח – זו כתובת לדוגמה`); return true;
+  }
   try {
     const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -860,7 +864,7 @@ async function ensureSaved() {
   const d = readDetails();
   if (F.token && sameDetails(d, F.saved)) return true;
   let human;
-  if (!F.token && !DEMO) {   // a new request: quick "am I human" check (usually invisible)
+  if (!F.token && !DEMO && CFG.turnstileSiteKey) {   // a new request: quick "am I human" check (usually invisible)
     human = await humanToken();
     if (!human) { toast('לא הצלחנו לאמת את הטופס. נסו שוב.'); return false; }
   }
