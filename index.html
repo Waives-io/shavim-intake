@@ -1050,7 +1050,10 @@ async function loadDash(silent) {
   catch (e) { console.error(e); $('#app').innerHTML = `<div class="wrap wide"><div class="empty">לא הצלחנו לטעון את הבקשות. בדקי את החיבור לאינטרנט.<br><br><button class="btn" onclick="loadDash()">ניסיון נוסף</button></div></div>`; return; }
   await autoPurge();
   renderDash();
-  if (D.openId) { const r = D.list.find(x => x.id === D.openId); if (r) openDrawer(r.id); else D.openId = null; }
+  if (D.openId) {   // an open drawer is refreshed in place (keeps scroll and focus)
+    const r = D.list.find(x => x.id === D.openId);
+    if (!r) D.openId = null; else if ($('.drawer')) fillDrawer(r); else openDrawer(r.id);
+  }
 }
 async function autoPurge() {
   if (!DEMO) return;  // live: the Worker purges daily
@@ -1065,7 +1068,8 @@ function renderDash() {
   $('#app').innerHTML = `<div class="wrap wide">
     <div class="dash-head"><h1>סטטוס מסמכי חובה לקליטת מתמודד חדש</h1>
       <div class="share">
-        <button class="btn small" id="cplink">העתקת הלינק לטופס</button></div></div>
+        ${CFG.formButton ? '<a class="btn small" href="${esc(BASE_URL)}" target="_blank" rel="noopener">טופס גורם מפנה</a>'
+          : '<button class="btn small" id="cplink">העתקת הלינק לטופס</button>'}</div></div>
     ${'showDirectoryPicker' in window ? '' : '<div class="folderline">ההורדה לתיקייה עובדת ב-Chrome או Edge במחשב.</div>'}
     <div class="toolbar">
       <div class="chips" role="group" aria-label="סינון">${FILTERS.map(f =>
@@ -1075,7 +1079,7 @@ function renderDash() {
     <div class="list" id="list"></div></div>`;
   $$('.chip[data-f]').forEach(c => c.onclick = () => { D.filter = c.dataset.f; renderDash(); const n = $(`.chip[data-f="${D.filter}"]`); n && n.focus(); });
   $('#q').oninput = e => { D.q = e.target.value; renderRows(); };
-  $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
+  if ($('#cplink')) $('#cplink').onclick = async () => { await copyText(BASE_URL); toast('הלינק לטופס הועתק'); };
   renderRows();
 }
 function pillsHtml(r) {
@@ -1166,6 +1170,7 @@ function fillDrawer(r, dr = $('.drawer')) {
   const hist = [
     ['נפתח', r.created_at], ['נשלח', r.submitted_at], ['בקשה לעדכון אחרונה', r.last_reminder_at], ['אושר', r.approved_at],
     ['תודה נשלחה', r.thanks_sent_at], ['הורדה אחרונה', r.last_download_at], ['נמחק מהענן', r.purged_at]].filter(x => x[1]).map(x => `${x[0]}: ${fmtDate(x[1])}`).join(' · ');
+  const keep = [dr.scrollTop, dr.querySelector('.dr-body')?.scrollTop || 0];   // redraw in place, not back to the top
   dr.innerHTML = `<div class="dr-top"><button class="btn ghost small" id="back">→ חזרה לכל הבקשות</button></div>
     <div class="dr-body">
       <span class="badge ${STATUS[r.status].cls}">${STATUS[r.status].label}</span>
@@ -1196,13 +1201,20 @@ function fillDrawer(r, dr = $('.drawer')) {
       <div class="danger"><button class="linkbtn" id="del">מחיקת הבקשה</button></div>
     </div>
     ${primary || dl || arch ? `<div class="dr-actions">${primary}${dl}${arch}${why ? `<span class="why">${why}</span>` : ''}</div>` : ''}`;
+  dr.scrollTop = keep[0]; dr.querySelector('.dr-body').scrollTop = keep[1];
   dr.querySelector('#back').onclick = closeDrawer;
   dr.querySelectorAll('[data-view]').forEach(b => b.onclick = async () => {
     const f = fs.find(x => x.id === b.dataset.view); const w = window.open('', '_blank');
     try { const url = await API.viewUrl(f); if (w) w.location = url; else window.open(url, '_blank'); }
     catch { w && w.close(); toast('לא הצלחנו לפתוח את הקובץ'); }
   });
-  dr.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => doReview(r, b));
+  dr.querySelectorAll('[data-rv]').forEach(b => b.onclick = e => {
+    if (b.classList.contains('sw-t') && e.detail) {   // a click on the track picks the side it landed on (RTL: תקין on the right)
+      const box = b.getBoundingClientRect();
+      b.dataset.st = e.clientX >= box.left + box.width / 2 ? 'ok' : 'replace';
+    }
+    doReview(r, b);
+  });
   const on = (id, fn) => { const b = dr.querySelector('#' + id); if (b) b.onclick = e => fn(r, e.currentTarget); };
   on('approve', doApprove); on('remind', doRemind); on('thanks', doThanks); on('dl', doDownload); on('del', doDelete); on('arch', doArchive);
   dr.querySelectorAll('[data-dlf]').forEach(b => b.onclick = () => doDownload(r, b, b.dataset.dlf));   // one file

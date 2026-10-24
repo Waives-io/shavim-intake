@@ -224,6 +224,18 @@ async def main():
         # per-document review on a submitted request
         await page.click('.lrow[data-id]:has-text("נועם בר")')
         await page.wait_for_selector('.drawer #approve')
+        vp = page.viewport_size; await page.set_viewport_size({'width': vp['width'], 'height': 480})   # drawer has to scroll
+        await page.evaluate("document.querySelector('.drawer').scrollTop = 99999"); top = await page.evaluate("document.querySelector('.drawer').scrollTop")
+        t = page.locator('.drawer .sw-t[data-rv=committee]'); bb = await t.bounding_box()
+        # left side of an unmarked switch; a dispatched click, so the test itself doesn't scroll the drawer
+        await page.evaluate("""() => { const b = document.querySelector('.drawer .sw-t[data-rv=committee]'), r = b.getBoundingClientRect();
+          b.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1, clientX: r.left + 4, clientY: r.top + 4})); }""")
+        await page.wait_for_timeout(500)
+        check('switch: left side → "נדרש להחליף"', await page.get_attribute('.drawer [data-rv=committee][data-st=replace]', 'aria-checked') == 'true')
+        check('drawer keeps its scroll after marking', top > 0 and abs(await page.evaluate("document.querySelector('.drawer').scrollTop") - top) < 5, str(top))
+        await t.click(position={'x': bb['width'] - 6, 'y': bb['height'] / 2}); await page.wait_for_timeout(500)
+        check('switch: right side → "תקין"', await page.get_attribute('.drawer [data-rv=committee][data-st=ok]', 'aria-checked') == 'true')
+        await page.set_viewport_size(vp)
         await page.click('.drawer [data-rv=psychiatric][data-st=replace]')
         await page.wait_for_selector('.drawer #remind')
         check('"replace" swaps approve for a reminder', await page.query_selector('.drawer #approve') is None)

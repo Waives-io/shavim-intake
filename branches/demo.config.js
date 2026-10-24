@@ -11,5 +11,6 @@ window.SHAVIM_CONFIG = {
   signature: ['גלי לוי', 'מרכז שווים – הדגמה'],   // חתימה בהודעות לגורם המפנה
   whatsappBusiness: '055-4669714',
   turnstileSiteKey: '',     // demo: no "אני לא רובוט" check (the Turnstile widget is set up for the Holon address)
+  formButton: true,         // demo: the dashboard opens the referrer form instead of copying its link
   publicUrl: ''
 };
